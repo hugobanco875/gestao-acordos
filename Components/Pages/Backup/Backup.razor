@@ -1,0 +1,121 @@
+@page "/backup"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject BackupService BackupSvc
+@inject IJSRuntime JS
+
+<PageTitle>Backup</PageTitle>
+
+<h1 class="h3 mb-3"><i class="bi bi-database-fill-down"></i> Backup do sistema</h1>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="h5"><i class="bi bi-download"></i> Baixar cópia</h2>
+        <p class="text-muted mb-2">
+            Gera um arquivo com <strong>todos os dados</strong> — empresas, clientes, acordos,
+            parcelas, eventos e os <strong>PDFs dos acordos</strong>. Guarde o arquivo em local seguro
+            (PC, pen drive, Google Drive...).
+        </p>
+        <button class="btn btn-primary" @onclick="Baixar" disabled="@ocupado">
+            @if (ocupado && baixando)
+            {
+                <span class="spinner-border spinner-border-sm"></span> <text>Gerando...</text>
+            }
+            else
+            {
+                <i class="bi bi-download"></i> <text>Baixar backup agora</text>
+            }
+        </button>
+        @if (msgBaixar is not null)
+        {
+            <div class="alert alert-success mt-3 mb-0">@msgBaixar</div>
+        }
+    </div>
+</div>
+
+<div class="card border-danger">
+    <div class="card-body">
+        <h2 class="h5 text-danger"><i class="bi bi-upload"></i> Restaurar cópia</h2>
+        <p class="text-muted mb-2">
+            Envia um arquivo de backup e <strong>substitui todos os dados atuais</strong> pelos do arquivo.
+            Use com cuidado — o que estiver no sistema agora será apagado.
+        </p>
+        <InputFile OnChange="Selecionar" accept=".json" class="form-control mb-2" />
+        <button class="btn btn-outline-danger" @onclick="Restaurar" disabled="@(arquivo is null || ocupado)">
+            @if (ocupado && !baixando)
+            {
+                <span class="spinner-border spinner-border-sm"></span> <text>Restaurando...</text>
+            }
+            else
+            {
+                <i class="bi bi-arrow-counterclockwise"></i> <text>Restaurar backup</text>
+            }
+        </button>
+        @if (msgRestaurar is not null)
+        {
+            <div class="alert @(erroRestaurar ? "alert-danger" : "alert-success") mt-3 mb-0">@msgRestaurar</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool ocupado;
+    private bool baixando;
+    private string? msgBaixar;
+    private string? msgRestaurar;
+    private bool erroRestaurar;
+    private byte[]? arquivo;
+
+    private async Task Baixar()
+    {
+        ocupado = true;
+        baixando = true;
+        msgBaixar = null;
+        try
+        {
+            var bytes = await BackupSvc.ExportarAsync();
+            var nome = $"backup_gestao-acordos_{DateTime.Now:yyyy-MM-dd_HHmm}.json";
+            await JS.InvokeVoidAsync("appDownload.fromBytes", nome, "application/json", Convert.ToBase64String(bytes));
+            msgBaixar = $"Backup gerado e baixado: {nome} ({bytes.Length / 1024} KB).";
+        }
+        finally
+        {
+            ocupado = false;
+            baixando = false;
+        }
+    }
+
+    private async Task Selecionar(InputFileChangeEventArgs e)
+    {
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024).CopyToAsync(ms);
+        arquivo = ms.ToArray();
+        erroRestaurar = false;
+        msgRestaurar = $"Arquivo selecionado ({arquivo.Length / 1024} KB). Clique em \"Restaurar backup\".";
+    }
+
+    private async Task Restaurar()
+    {
+        if (arquivo is null) return;
+        if (!await JS.InvokeAsync<bool>("confirm", "ATENÇÃO: isso vai APAGAR todos os dados atuais e substituir pelos do backup. Deseja continuar?"))
+            return;
+
+        ocupado = true;
+        try
+        {
+            var resumo = await BackupSvc.RestaurarAsync(arquivo);
+            erroRestaurar = false;
+            msgRestaurar = $"Restaurado com sucesso: {resumo}";
+            arquivo = null;
+        }
+        catch (Exception ex)
+        {
+            erroRestaurar = true;
+            msgRestaurar = $"Erro ao restaurar: {ex.Message}";
+        }
+        finally
+        {
+            ocupado = false;
+        }
+    }
+}
