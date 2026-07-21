@@ -1,0 +1,186 @@
+@page "/relatorios"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject RelatorioService Relatorio
+@inject IJSRuntime JS
+
+<PageTitle>Relatórios</PageTitle>
+
+<h1 class="h3 mb-3"><i class="bi bi-file-earmark-bar-graph"></i> Relatório de Parcelas Baixadas</h1>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1">Pagas de</label>
+                <InputDate class="form-control form-control-sm" @bind-Value="de" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-1">até</label>
+                <InputDate class="form-control form-control-sm" @bind-Value="ate" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Empresa</label>
+                <select class="form-select form-select-sm" @onchange="OnEmpresaChanged">
+                    <option value="0">Todas</option>
+                    @foreach (var e in empresas)
+                    {
+                        <option value="@e.Id" selected="@(e.Id == empresaId)">@e.Nome</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Cliente</label>
+                <select class="form-select form-select-sm" @bind="clienteId">
+                    <option value="0">Todos</option>
+                    @foreach (var c in clientes.Where(c => empresaId == 0 || c.EmpresaId == empresaId))
+                    {
+                        <option value="@c.Id">@c.Nome</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary btn-sm w-100" @onclick="Gerar"><i class="bi bi-funnel"></i> Gerar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (itens is not null)
+{
+    <div class="d-flex justify-content-between align-items-center flex-wrap mb-2">
+        <div>
+            <span class="me-3">@itens.Count parcela(s)</span>
+            <span>Total recebido: <strong class="text-success">@itens.Sum(i => i.ValorPago ?? i.Valor).ToString("C")</strong></span>
+        </div>
+        <div>
+            <button class="btn btn-outline-success btn-sm" @onclick="ExportarExcel" disabled="@(itens.Count == 0)"><i class="bi bi-file-earmark-excel"></i> Excel</button>
+            <button class="btn btn-outline-danger btn-sm" @onclick="ExportarPdf" disabled="@(itens.Count == 0)"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+        </div>
+    </div>
+
+    @if (itens.Count == 0)
+    {
+        <div class="alert alert-info">Nenhuma parcela baixada no período/filtros selecionados.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Empresa</th>
+                        <th>Cliente</th>
+                        <th class="d-none d-md-table-cell">Processo</th>
+                        <th class="text-center">Parc.</th>
+                        <th>Vencimento</th>
+                        <th>Pagamento</th>
+                        <th class="text-end">Valor pago</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in itens)
+                    {
+                        <tr>
+                            <td>@i.Empresa</td>
+                            <td>@i.Cliente</td>
+                            <td class="d-none d-md-table-cell">@i.NumeroProcesso</td>
+                            <td class="text-center">@i.NumeroParcela</td>
+                            <td>@i.Vencimento.ToString("dd/MM/yyyy")</td>
+                            <td>@i.DataPagamento?.ToString("dd/MM/yyyy")</td>
+                            <td class="text-end">@((i.ValorPago ?? i.Valor).ToString("C"))</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th colspan="6" class="text-end">TOTAL</th>
+                        <th class="text-end">@itens.Sum(i => i.ValorPago ?? i.Valor).ToString("C")</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private List<Empresa> empresas = new();
+    private List<Cliente> clientes = new();
+    private List<RelatorioParcelaItem>? itens;
+
+    private DateOnly de = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateOnly ate = DateOnly.FromDateTime(DateTime.Today);
+    private int empresaId;
+    private int clienteId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        empresas = await db.Empresas.OrderBy(e => e.Nome).ToListAsync();
+        clientes = await db.Clientes.OrderBy(c => c.Nome).ToListAsync();
+        await Gerar();
+    }
+
+    private void OnEmpresaChanged(ChangeEventArgs e)
+    {
+        empresaId = int.TryParse(e.Value?.ToString(), out var v) ? v : 0;
+        clienteId = 0;
+    }
+
+    private async Task Gerar()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        var q = db.Parcelas
+            .Include(p => p.Acordo)!.ThenInclude(a => a!.Cliente)!.ThenInclude(c => c!.Empresa)
+            .Where(p => p.Paga && p.DataPagamento >= de && p.DataPagamento <= ate);
+
+        if (empresaId > 0)
+            q = q.Where(p => p.Acordo!.Cliente!.EmpresaId == empresaId);
+        if (clienteId > 0)
+            q = q.Where(p => p.Acordo!.ClienteId == clienteId);
+
+        var parcelas = await q
+            .OrderBy(p => p.Acordo!.Cliente!.Empresa!.Nome)
+            .ThenBy(p => p.Acordo!.Cliente!.Nome)
+            .ThenBy(p => p.DataPagamento)
+            .ToListAsync();
+
+        itens = parcelas.Select(p => new RelatorioParcelaItem(
+            p.Acordo!.Cliente!.Empresa!.Nome,
+            p.Acordo!.Cliente!.Nome,
+            p.Acordo!.NumeroProcesso,
+            p.Numero,
+            p.Valor,
+            p.DataVencimento,
+            p.DataPagamento,
+            p.ValorPago)).ToList();
+    }
+
+    private string FiltroDescricao()
+    {
+        var emp = empresaId == 0 ? "Todas as empresas" : $"Empresa: {empresas.FirstOrDefault(e => e.Id == empresaId)?.Nome}";
+        var cli = clienteId == 0 ? "Todos os clientes" : $"Cliente: {clientes.FirstOrDefault(c => c.Id == clienteId)?.Nome}";
+        return $"{emp}  |  {cli}";
+    }
+
+    private async Task ExportarExcel()
+    {
+        if (itens is null) return;
+        var bytes = Relatorio.GerarExcel(itens, de, ate, FiltroDescricao());
+        await JS.InvokeVoidAsync("appDownload.fromBytes",
+            $"parcelas_baixadas_{de:yyyyMMdd}_{ate:yyyyMMdd}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            Convert.ToBase64String(bytes));
+    }
+
+    private async Task ExportarPdf()
+    {
+        if (itens is null) return;
+        var bytes = Relatorio.GerarPdf(itens, de, ate, FiltroDescricao());
+        await JS.InvokeVoidAsync("appDownload.fromBytes",
+            $"parcelas_baixadas_{de:yyyyMMdd}_{ate:yyyyMMdd}.pdf",
+            "application/pdf",
+            Convert.ToBase64String(bytes));
+    }
+}

@@ -1,0 +1,255 @@
+@page "/eventos"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IJSRuntime JS
+
+<PageTitle>Eventos</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0"><i class="bi bi-calendar-event"></i> Eventos</h1>
+    <button class="btn btn-primary" @onclick="Novo"><i class="bi bi-plus-lg"></i> Novo evento</button>
+</div>
+
+<div class="mb-3 btn-group btn-group-sm" role="group">
+    <button class="btn @(filtro == "proximos" ? "btn-primary" : "btn-outline-primary")" @onclick='() => SetFiltro("proximos")'>Próximos</button>
+    <button class="btn @(filtro == "todos" ? "btn-primary" : "btn-outline-primary")" @onclick='() => SetFiltro("todos")'>Todos</button>
+    <button class="btn @(filtro == "concluidos" ? "btn-primary" : "btn-outline-primary")" @onclick='() => SetFiltro("concluidos")'>Concluídos</button>
+</div>
+
+@if (eventos is null)
+{
+    <p><em>Carregando...</em></p>
+}
+else if (Filtrados.Count == 0)
+{
+    <div class="alert alert-info">Nenhum evento encontrado.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Data/Hora</th>
+                    <th>Tipo</th>
+                    <th>Título</th>
+                    <th class="d-none d-md-table-cell">Cliente / Empresa</th>
+                    <th class="d-none d-lg-table-cell">Local</th>
+                    <th class="text-end">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var ev in Filtrados)
+                {
+                    <tr class="@(ev.Concluido ? "text-muted" : (ev.DataHora < DateTime.Now ? "table-warning" : ""))">
+                        <td class="text-nowrap">@ev.DataHora.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td><span class="badge @TipoCor(ev.Tipo)">@TipoNome(ev.Tipo)</span></td>
+                        <td>
+                            @ev.Titulo
+                            @if (ev.Concluido)
+                            {
+                                <i class="bi bi-check-circle-fill text-success ms-1" title="Concluído"></i>
+                            }
+                        </td>
+                        <td class="d-none d-md-table-cell small">
+                            @if (ev.Cliente is not null)
+                            {
+                                <div><i class="bi bi-person"></i> @ev.Cliente.Nome</div>
+                            }
+                            @if (ev.Empresa is not null)
+                            {
+                                <div><i class="bi bi-building"></i> @ev.Empresa.Nome</div>
+                            }
+                        </td>
+                        <td class="d-none d-lg-table-cell">@ev.Local</td>
+                        <td class="text-end text-nowrap">
+                            <button class="btn btn-sm btn-outline-success" title="@(ev.Concluido ? "Reabrir" : "Concluir")" @onclick="() => AlternarConcluido(ev)">
+                                <i class="bi @(ev.Concluido ? "bi-arrow-counterclockwise" : "bi-check2")"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Editar(ev)" title="Editar"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => Excluir(ev)" title="Excluir"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (editando)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <EditForm Model="modelo" OnValidSubmit="Salvar">
+                    <DataAnnotationsValidator />
+                    <div class="modal-header">
+                        <h5 class="modal-title">@(modelo.Id == 0 ? "Novo evento" : "Editar evento")</h5>
+                        <button type="button" class="btn-close" @onclick="Cancelar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-2">
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label">Tipo</label>
+                                <InputSelect class="form-select" @bind-Value="modelo.Tipo">
+                                    <option value="@TipoEvento.Reuniao">Reunião</option>
+                                    <option value="@TipoEvento.Audiencia">Audiência</option>
+                                    <option value="@TipoEvento.Outro">Outro</option>
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label">Data e hora *</label>
+                                <InputDate Type="InputDateType.DateTimeLocal" class="form-control" @bind-Value="modelo.DataHora" />
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Título / assunto *</label>
+                            <InputText class="form-control" @bind-Value="modelo.Titulo" />
+                            <ValidationMessage For="() => modelo.Titulo" />
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label">Empresa</label>
+                                <InputSelect class="form-select" @bind-Value="modelo.EmpresaId">
+                                    <option value="">(nenhuma)</option>
+                                    @foreach (var e in empresas)
+                                    {
+                                        <option value="@e.Id">@e.Nome</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label class="form-label">Cliente</label>
+                                <InputSelect class="form-select" @bind-Value="modelo.ClienteId">
+                                    <option value="">(nenhum)</option>
+                                    @foreach (var c in clientes)
+                                    {
+                                        <option value="@c.Id">@c.Nome</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Local</label>
+                            <InputText class="form-control" @bind-Value="modelo.Local" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Observações</label>
+                            <InputTextArea class="form-control" rows="2" @bind-Value="modelo.Observacoes" />
+                        </div>
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input" id="concluido" @bind-Value="modelo.Concluido" />
+                            <label class="form-check-label" for="concluido">Concluído</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Salvar</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Evento>? eventos;
+    private List<Empresa> empresas = new();
+    private List<Cliente> clientes = new();
+    private bool editando;
+    private Evento modelo = new();
+    private string filtro = "proximos";
+
+    private List<Evento> Filtrados => (eventos ?? new()).Where(ev => filtro switch
+    {
+        "proximos" => !ev.Concluido && ev.DataHora >= DateTime.Today,
+        "concluidos" => ev.Concluido,
+        _ => true
+    }).OrderBy(ev => ev.DataHora).ToList();
+
+    protected override async Task OnInitializedAsync() => await Carregar();
+
+    private async Task Carregar()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        empresas = await db.Empresas.OrderBy(e => e.Nome).ToListAsync();
+        clientes = await db.Clientes.OrderBy(c => c.Nome).ToListAsync();
+        eventos = await db.Eventos.Include(ev => ev.Empresa).Include(ev => ev.Cliente).ToListAsync();
+    }
+
+    private void SetFiltro(string f) => filtro = f;
+
+    private static string TipoNome(TipoEvento t) => t switch
+    {
+        TipoEvento.Reuniao => "Reunião",
+        TipoEvento.Audiencia => "Audiência",
+        _ => "Outro"
+    };
+
+    private static string TipoCor(TipoEvento t) => t switch
+    {
+        TipoEvento.Reuniao => "bg-primary",
+        TipoEvento.Audiencia => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private void Novo()
+    {
+        modelo = new Evento { DataHora = DateTime.Now };
+        editando = true;
+    }
+
+    private void Editar(Evento ev)
+    {
+        modelo = new Evento
+        {
+            Id = ev.Id,
+            Tipo = ev.Tipo,
+            Titulo = ev.Titulo,
+            DataHora = ev.DataHora,
+            EmpresaId = ev.EmpresaId,
+            ClienteId = ev.ClienteId,
+            Local = ev.Local,
+            Observacoes = ev.Observacoes,
+            Concluido = ev.Concluido,
+            CriadoEm = ev.CriadoEm
+        };
+        editando = true;
+    }
+
+    private void Cancelar() => editando = false;
+
+    private async Task Salvar()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        if (modelo.Id == 0)
+            db.Eventos.Add(modelo);
+        else
+            db.Eventos.Update(modelo);
+        await db.SaveChangesAsync();
+        editando = false;
+        await Carregar();
+    }
+
+    private async Task AlternarConcluido(Evento ev)
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        var e = await db.Eventos.FirstOrDefaultAsync(x => x.Id == ev.Id);
+        if (e is null) return;
+        e.Concluido = !e.Concluido;
+        await db.SaveChangesAsync();
+        await Carregar();
+    }
+
+    private async Task Excluir(Evento ev)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Excluir o evento \"{ev.Titulo}\"?"))
+            return;
+
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.Eventos.Remove(new Evento { Id = ev.Id });
+        await db.SaveChangesAsync();
+        await Carregar();
+    }
+}

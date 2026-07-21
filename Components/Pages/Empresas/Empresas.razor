@@ -1,0 +1,181 @@
+@page "/empresas"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IJSRuntime JS
+
+<PageTitle>Empresas</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0"><i class="bi bi-building"></i> Empresas</h1>
+    <button class="btn btn-primary" @onclick="Novo"><i class="bi bi-plus-lg"></i> Nova empresa</button>
+</div>
+
+@if (empresas is null)
+{
+    <p><em>Carregando...</em></p>
+}
+else if (empresas.Count == 0)
+{
+    <div class="alert alert-info">Nenhuma empresa cadastrada. Clique em <strong>Nova empresa</strong> para começar.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th class="d-none d-md-table-cell">CNPJ/CPF</th>
+                    <th class="d-none d-md-table-cell">Telefone</th>
+                    <th class="text-center">Clientes</th>
+                    <th class="text-end">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var e in empresas)
+                {
+                    <tr>
+                        <td>
+                            @e.Nome
+                            @if (!e.Ativo)
+                            {
+                                <span class="badge bg-secondary ms-1">inativa</span>
+                            }
+                        </td>
+                        <td class="d-none d-md-table-cell">@e.CnpjCpf</td>
+                        <td class="d-none d-md-table-cell">@e.Telefone</td>
+                        <td class="text-center">@e.Clientes.Count</td>
+                        <td class="text-end text-nowrap">
+                            <button class="btn btn-sm btn-outline-primary" title="Editar" @onclick="() => Editar(e)"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" title="Excluir" @onclick="() => Excluir(e)"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (editando)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <EditForm Model="modelo" OnValidSubmit="Salvar">
+                    <DataAnnotationsValidator />
+                    <div class="modal-header">
+                        <h5 class="modal-title">@(modelo.Id == 0 ? "Nova empresa" : "Editar empresa")</h5>
+                        <button type="button" class="btn-close" @onclick="Cancelar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Nome *</label>
+                            <InputText class="form-control" @bind-Value="modelo.Nome" />
+                            <ValidationMessage For="() => modelo.Nome" />
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">CNPJ/CPF</label>
+                                <InputText class="form-control" @bind-Value="modelo.CnpjCpf" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Telefone</label>
+                                <InputText class="form-control" @bind-Value="modelo.Telefone" />
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">E-mail</label>
+                            <InputText class="form-control" @bind-Value="modelo.Email" />
+                            <ValidationMessage For="() => modelo.Email" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Observações</label>
+                            <InputTextArea class="form-control" rows="2" @bind-Value="modelo.Observacoes" />
+                        </div>
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input" id="ativo" @bind-Value="modelo.Ativo" />
+                            <label class="form-check-label" for="ativo">Empresa ativa</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Salvar</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Empresa>? empresas;
+    private bool editando;
+    private Empresa modelo = new();
+
+    protected override async Task OnInitializedAsync() => await Carregar();
+
+    private async Task Carregar()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        empresas = await db.Empresas
+            .Include(e => e.Clientes)
+            .OrderBy(e => e.Nome)
+            .ToListAsync();
+    }
+
+    private void Novo()
+    {
+        modelo = new Empresa();
+        editando = true;
+    }
+
+    private void Editar(Empresa e)
+    {
+        modelo = new Empresa
+        {
+            Id = e.Id,
+            Nome = e.Nome,
+            CnpjCpf = e.CnpjCpf,
+            Telefone = e.Telefone,
+            Email = e.Email,
+            Observacoes = e.Observacoes,
+            Ativo = e.Ativo,
+            CriadoEm = e.CriadoEm
+        };
+        editando = true;
+    }
+
+    private void Cancelar() => editando = false;
+
+    private async Task Salvar()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        if (modelo.Id == 0)
+            db.Empresas.Add(modelo);
+        else
+            db.Empresas.Update(modelo);
+        await db.SaveChangesAsync();
+        editando = false;
+        await Carregar();
+    }
+
+    private async Task Excluir(Empresa e)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Excluir a empresa \"{e.Nome}\"?"))
+            return;
+
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.Empresas.Remove(new Empresa { Id = e.Id });
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            await JS.InvokeVoidAsync("alert", "Não é possível excluir: a empresa possui clientes vinculados. Inative-a em vez de excluir.");
+            return;
+        }
+        await Carregar();
+    }
+}

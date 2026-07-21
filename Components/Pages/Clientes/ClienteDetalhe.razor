@@ -1,0 +1,127 @@
+@page "/clientes/{Id:int}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IJSRuntime JS
+
+<PageTitle>Cliente</PageTitle>
+
+@if (cliente is null)
+{
+    <p><em>Carregando...</em></p>
+}
+else
+{
+    <div class="mb-3">
+        <a href="clientes" class="btn btn-sm btn-link px-0"><i class="bi bi-arrow-left"></i> Voltar para clientes</a>
+        <h1 class="h3 mb-1"><i class="bi bi-person"></i> @cliente.Nome</h1>
+        <div class="text-muted small">
+            <span class="me-3"><i class="bi bi-building"></i> @cliente.Empresa?.Nome</span>
+            @if (!string.IsNullOrWhiteSpace(cliente.CpfCnpj))
+            {
+                <span class="me-3"><i class="bi bi-person-vcard"></i> @cliente.CpfCnpj</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(cliente.Telefone))
+            {
+                <span class="me-3"><i class="bi bi-telephone"></i> @cliente.Telefone</span>
+            }
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="h5 mb-0">Acordos / Processos</h2>
+        <a class="btn btn-primary btn-sm" href="clientes/@cliente.Id/acordos/novo"><i class="bi bi-plus-lg"></i> Novo acordo</a>
+    </div>
+
+    @if (cliente.Acordos.Count == 0)
+    {
+        <div class="alert alert-info">Nenhum acordo cadastrado para este cliente. Clique em <strong>Novo acordo</strong>.</div>
+    }
+    else
+    {
+        @foreach (var a in cliente.Acordos.OrderByDescending(x => x.CriadoEm))
+        {
+            var pagas = a.Parcelas.Count(p => p.Paga);
+            <div class="card mb-2 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between flex-wrap gap-2">
+                        <div>
+                            <h3 class="h6 mb-1">
+                                @if (!string.IsNullOrWhiteSpace(a.NumeroProcesso))
+                                {
+                                    <span><i class="bi bi-hash"></i>Processo @a.NumeroProcesso</span>
+                                }
+                                else
+                                {
+                                    <span>Acordo #@a.Id</span>
+                                }
+                            </h3>
+                            @if (!string.IsNullOrWhiteSpace(a.Descricao))
+                            {
+                                <div class="small text-muted">@a.Descricao</div>
+                            }
+                            <div class="mt-1 d-flex flex-wrap gap-1">
+                                <span class="badge bg-primary">Total @a.ValorTotal.ToString("C")</span>
+                                <span class="badge @(pagas == a.Parcelas.Count ? "bg-success" : "bg-warning text-dark")">
+                                    @pagas/@a.Parcelas.Count parcelas pagas
+                                </span>
+                                @if (a.TemPdf)
+                                {
+                                    <span class="badge bg-info text-dark"><i class="bi bi-file-earmark-pdf"></i> PDF anexado</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="text-nowrap">
+                            <a class="btn btn-sm btn-outline-success" href="acordos/@a.Id" title="Ver parcelas"><i class="bi bi-list-check"></i> Parcelas</a>
+                            @if (a.TemPdf)
+                            {
+                                <button class="btn btn-sm btn-outline-info" @onclick="() => VerPdf(a.Id)" title="Ver PDF do acordo"><i class="bi bi-file-earmark-pdf"></i></button>
+                            }
+                            <a class="btn btn-sm btn-outline-primary" href="acordos/@a.Id/editar" title="Editar"><i class="bi bi-pencil"></i></a>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ExcluirAcordo(a)" title="Excluir"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Cliente? cliente;
+
+    protected override async Task OnParametersSetAsync() => await Carregar();
+
+    private async Task Carregar()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        cliente = await db.Clientes
+            .Include(c => c.Empresa)
+            .Include(c => c.Acordos).ThenInclude(a => a.Parcelas)
+            .FirstOrDefaultAsync(c => c.Id == Id);
+    }
+
+    private async Task VerPdf(int acordoId)
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        var pdf = await db.AcordosPdf.FirstOrDefaultAsync(p => p.AcordoId == acordoId);
+        if (pdf is null)
+        {
+            await JS.InvokeVoidAsync("alert", "PDF não encontrado.");
+            return;
+        }
+        await JS.InvokeVoidAsync("appDownload.openPdf", Convert.ToBase64String(pdf.Conteudo));
+    }
+
+    private async Task ExcluirAcordo(Acordo a)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Excluir este acordo e todas as suas parcelas?"))
+            return;
+
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.Acordos.Remove(new Acordo { Id = a.Id });
+        await db.SaveChangesAsync();
+        await Carregar();
+    }
+}

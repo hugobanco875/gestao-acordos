@@ -1,0 +1,242 @@
+@page "/parcelas"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IJSRuntime JS
+
+<PageTitle>Baixa de Parcelas</PageTitle>
+
+<h1 class="h3 mb-3"><i class="bi bi-cash-coin"></i> Baixa de Parcelas</h1>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Empresa</label>
+                <select class="form-select form-select-sm" @onchange="OnEmpresaChanged">
+                    <option value="0">Todas</option>
+                    @foreach (var e in empresas)
+                    {
+                        <option value="@e.Id" selected="@(e.Id == filtroEmpresaId)">@e.Nome</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Cliente</label>
+                <select class="form-select form-select-sm" @bind="filtroClienteId">
+                    <option value="0">Todos</option>
+                    @foreach (var c in clientes.Where(c => filtroEmpresaId == 0 || c.EmpresaId == filtroEmpresaId))
+                    {
+                        <option value="@c.Id">@c.Nome</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Status</label>
+                <select class="form-select form-select-sm" @bind="filtroStatus">
+                    <option value="aberto">Em aberto</option>
+                    <option value="vencidas">Vencidas</option>
+                    <option value="pagas">Pagas</option>
+                    <option value="todas">Todas</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Vencimento de</label>
+                <InputDate class="form-control form-control-sm" @bind-Value="dataDe" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">até</label>
+                <InputDate class="form-control form-control-sm" @bind-Value="dataAte" />
+            </div>
+        </div>
+        <div class="mt-2">
+            <button class="btn btn-primary btn-sm" @onclick="Carregar"><i class="bi bi-funnel"></i> Filtrar</button>
+        </div>
+    </div>
+</div>
+
+@if (parcelas is null)
+{
+    <p><em>Carregando...</em></p>
+}
+else
+{
+    <div class="d-flex justify-content-between flex-wrap mb-2">
+        <span class="text-muted">@parcelas.Count parcela(s)</span>
+        <span>
+            <span class="me-3">Total: <strong>@parcelas.Sum(p => p.Valor).ToString("C")</strong></span>
+            <span>Em aberto: <strong class="text-danger">@parcelas.Where(p => !p.Paga).Sum(p => p.Valor).ToString("C")</strong></span>
+        </span>
+    </div>
+
+    @if (parcelas.Count == 0)
+    {
+        <div class="alert alert-info">Nenhuma parcela para os filtros selecionados.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th class="d-none d-md-table-cell">Empresa</th>
+                        <th>Cliente</th>
+                        <th class="d-none d-lg-table-cell">Processo</th>
+                        <th class="text-center">Parc.</th>
+                        <th>Vencimento</th>
+                        <th class="text-end">Valor</th>
+                        <th>Status</th>
+                        <th>Baixar em</th>
+                        <th class="text-end">Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in parcelas)
+                    {
+                        <tr class="@LinhaClasse(p)">
+                            <td class="d-none d-md-table-cell">@p.Acordo?.Cliente?.Empresa?.Nome</td>
+                            <td>
+                                <a href="acordos/@p.AcordoId">@p.Acordo?.Cliente?.Nome</a>
+                            </td>
+                            <td class="d-none d-lg-table-cell">@p.Acordo?.NumeroProcesso</td>
+                            <td class="text-center">@p.Numero</td>
+                            <td>@p.DataVencimento.ToString("dd/MM/yyyy")</td>
+                            <td class="text-end">@p.Valor.ToString("C")</td>
+                            <td>
+                                @if (p.Paga)
+                                {
+                                    <span class="badge bg-success">Paga @p.DataPagamento?.ToString("dd/MM")</span>
+                                }
+                                else if (p.DataVencimento < hoje)
+                                {
+                                    <span class="badge bg-danger">Vencida</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">A vencer</span>
+                                }
+                            </td>
+                            <td>
+                                @if (!p.Paga && datasBaixa.ContainsKey(p.Id))
+                                {
+                                    <input type="date" class="form-control form-control-sm" style="max-width:150px"
+                                           value="@datasBaixa[p.Id].ToString("yyyy-MM-dd")"
+                                           @onchange="e => SetDataBaixa(p.Id, e.Value)" />
+                                }
+                            </td>
+                            <td class="text-end text-nowrap">
+                                @if (p.Paga)
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => Estornar(p)"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-success" @onclick="() => Baixar(p)"><i class="bi bi-check-lg"></i> Baixar</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private List<Empresa> empresas = new();
+    private List<Cliente> clientes = new();
+    private List<Parcela>? parcelas;
+
+    private int filtroEmpresaId;
+    private int filtroClienteId;
+    private string filtroStatus = "aberto";
+    private DateOnly? dataDe;
+    private DateOnly? dataAte;
+
+    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private Dictionary<int, DateOnly> datasBaixa = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        empresas = await db.Empresas.OrderBy(e => e.Nome).ToListAsync();
+        clientes = await db.Clientes.OrderBy(c => c.Nome).ToListAsync();
+        await Carregar();
+    }
+
+    private void OnEmpresaChanged(ChangeEventArgs e)
+    {
+        filtroEmpresaId = int.TryParse(e.Value?.ToString(), out var v) ? v : 0;
+        filtroClienteId = 0;
+    }
+
+    private async Task Carregar()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        var q = db.Parcelas
+            .Include(p => p.Acordo)!.ThenInclude(a => a!.Cliente)!.ThenInclude(c => c!.Empresa)
+            .AsQueryable();
+
+        if (filtroEmpresaId > 0)
+            q = q.Where(p => p.Acordo!.Cliente!.EmpresaId == filtroEmpresaId);
+        if (filtroClienteId > 0)
+            q = q.Where(p => p.Acordo!.ClienteId == filtroClienteId);
+
+        q = filtroStatus switch
+        {
+            "aberto" => q.Where(p => !p.Paga),
+            "vencidas" => q.Where(p => !p.Paga && p.DataVencimento < hoje),
+            "pagas" => q.Where(p => p.Paga),
+            _ => q
+        };
+
+        if (dataDe is not null)
+            q = q.Where(p => p.DataVencimento >= dataDe);
+        if (dataAte is not null)
+            q = q.Where(p => p.DataVencimento <= dataAte);
+
+        parcelas = await q.OrderBy(p => p.DataVencimento).ThenBy(p => p.Numero).ToListAsync();
+        datasBaixa = parcelas.Where(p => !p.Paga).ToDictionary(p => p.Id, _ => hoje);
+    }
+
+    private string LinhaClasse(Parcela p)
+    {
+        if (p.Paga) return "";
+        if (p.DataVencimento < hoje) return "table-warning";
+        return "";
+    }
+
+    private void SetDataBaixa(int parcelaId, object? valor)
+    {
+        if (DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var d))
+            datasBaixa[parcelaId] = d;
+    }
+
+    private async Task Baixar(Parcela p)
+    {
+        var data = datasBaixa.TryGetValue(p.Id, out var d) ? d : hoje;
+        using var db = await DbFactory.CreateDbContextAsync();
+        var parcela = await db.Parcelas.FirstOrDefaultAsync(x => x.Id == p.Id);
+        if (parcela is null) return;
+        parcela.Paga = true;
+        parcela.DataPagamento = data;
+        parcela.ValorPago = parcela.Valor;
+        await db.SaveChangesAsync();
+        await Carregar();
+    }
+
+    private async Task Estornar(Parcela p)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Estornar a baixa desta parcela?"))
+            return;
+
+        using var db = await DbFactory.CreateDbContextAsync();
+        var parcela = await db.Parcelas.FirstOrDefaultAsync(x => x.Id == p.Id);
+        if (parcela is null) return;
+        parcela.Paga = false;
+        parcela.DataPagamento = null;
+        parcela.ValorPago = null;
+        await db.SaveChangesAsync();
+        await Carregar();
+    }
+}

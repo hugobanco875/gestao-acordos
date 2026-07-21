@@ -1,0 +1,209 @@
+@page "/"
+@attribute [Authorize]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<PageTitle>Dashboard</PageTitle>
+
+<h1 class="h3 mb-3"><i class="bi bi-speedometer2"></i> Dashboard</h1>
+
+@if (carregando)
+{
+    <p><em>Carregando...</em></p>
+}
+else
+{
+    @if (vencidas.Count > 0)
+    {
+        <div class="alert alert-danger d-flex justify-content-between align-items-center">
+            <span>
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <strong>@vencidas.Count</strong> parcela(s) vencida(s) — total <strong>@vencidas.Sum(p => p.Valor).ToString("C")</strong>
+            </span>
+            <a href="parcelas" class="btn btn-sm btn-danger">Ver</a>
+        </div>
+    }
+
+    <h2 class="h5 mt-3"><i class="bi bi-cash-coin"></i> Parcelas a receber</h2>
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <a href="parcelas" class="text-decoration-none">
+                <div class="card text-bg-primary h-100"><div class="card-body">
+                    <div class="small">Hoje</div>
+                    <div class="h4 mb-0">@SomaAbertas(p => p.DataVencimento == hoje).ToString("C")</div>
+                    <div class="small">@ContaAbertas(p => p.DataVencimento == hoje) parcela(s)</div>
+                </div></div>
+            </a>
+        </div>
+        <div class="col-6 col-lg-3">
+            <a href="parcelas" class="text-decoration-none">
+                <div class="card text-bg-info h-100"><div class="card-body">
+                    <div class="small">Esta semana</div>
+                    <div class="h4 mb-0">@SomaAbertas(p => p.DataVencimento >= inicioSemana && p.DataVencimento <= fimSemana).ToString("C")</div>
+                    <div class="small">@ContaAbertas(p => p.DataVencimento >= inicioSemana && p.DataVencimento <= fimSemana) parcela(s)</div>
+                </div></div>
+            </a>
+        </div>
+        <div class="col-6 col-lg-3">
+            <a href="parcelas" class="text-decoration-none">
+                <div class="card text-bg-secondary h-100"><div class="card-body">
+                    <div class="small">Este mês</div>
+                    <div class="h4 mb-0">@SomaAbertas(p => p.DataVencimento >= inicioMes && p.DataVencimento <= fimMes).ToString("C")</div>
+                    <div class="small">@ContaAbertas(p => p.DataVencimento >= inicioMes && p.DataVencimento <= fimMes) parcela(s)</div>
+                </div></div>
+            </a>
+        </div>
+        <div class="col-6 col-lg-3">
+            <a href="relatorios" class="text-decoration-none">
+                <div class="card text-bg-success h-100"><div class="card-body">
+                    <div class="small">Recebido no mês</div>
+                    <div class="h4 mb-0">@recebidoMes.ToString("C")</div>
+                    <div class="small">pagas em @hoje.ToString("MM/yyyy")</div>
+                </div></div>
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <h2 class="h5"><i class="bi bi-list-ul"></i> Próximas parcelas</h2>
+            @if (proximasParcelas.Count == 0)
+            {
+                <div class="alert alert-info">Nenhuma parcela em aberto.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle">
+                        <thead><tr><th>Cliente</th><th>Vencimento</th><th class="text-end">Valor</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in proximasParcelas)
+                            {
+                                <tr class="@(p.DataVencimento < hoje ? "table-warning" : "")">
+                                    <td><a href="acordos/@p.AcordoId">@p.Acordo?.Cliente?.Nome</a></td>
+                                    <td>@p.DataVencimento.ToString("dd/MM/yyyy")</td>
+                                    <td class="text-end">@p.Valor.ToString("C")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="col-lg-6">
+            <h2 class="h5"><i class="bi bi-calendar-event"></i> Eventos</h2>
+            <div class="row g-2 mb-3">
+                <div class="col-4">
+                    <div class="card text-center h-100"><div class="card-body py-2">
+                        <div class="small text-muted">Hoje</div><div class="h5 mb-0">@ContaEventos(d => d == hoje)</div>
+                    </div></div>
+                </div>
+                <div class="col-4">
+                    <div class="card text-center h-100"><div class="card-body py-2">
+                        <div class="small text-muted">Semana</div><div class="h5 mb-0">@ContaEventos(d => d >= inicioSemana && d <= fimSemana)</div>
+                    </div></div>
+                </div>
+                <div class="col-4">
+                    <div class="card text-center h-100"><div class="card-body py-2">
+                        <div class="small text-muted">Mês</div><div class="h5 mb-0">@ContaEventos(d => d >= inicioMes && d <= fimMes)</div>
+                    </div></div>
+                </div>
+            </div>
+
+            @if (proximosEventos.Count == 0)
+            {
+                <div class="alert alert-info">Nenhum evento agendado.</div>
+            }
+            else
+            {
+                <ul class="list-group">
+                    @foreach (var ev in proximosEventos)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="badge @TipoCor(ev.Tipo) me-1">@TipoNome(ev.Tipo)</span>
+                                @ev.Titulo
+                                @if (ev.Cliente is not null)
+                                {
+                                    <div class="small text-muted"><i class="bi bi-person"></i> @ev.Cliente.Nome</div>
+                                }
+                            </div>
+                            <span class="text-nowrap small">@ev.DataHora.ToString("dd/MM HH:mm")</span>
+                        </li>
+                    }
+                </ul>
+                <a href="eventos" class="btn btn-sm btn-link px-0 mt-1">Ver todos os eventos</a>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool carregando = true;
+
+    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly inicioSemana, fimSemana, inicioMes, fimMes;
+
+    private List<Parcela> abertas = new();
+    private List<Parcela> vencidas = new();
+    private List<Parcela> proximasParcelas = new();
+    private decimal recebidoMes;
+    private List<Evento> eventos = new();
+    private List<Evento> proximosEventos = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        int diff = (7 + (int)DateTime.Today.DayOfWeek - (int)DayOfWeek.Monday) % 7;
+        inicioSemana = hoje.AddDays(-diff);
+        fimSemana = inicioSemana.AddDays(6);
+        inicioMes = new DateOnly(hoje.Year, hoje.Month, 1);
+        fimMes = inicioMes.AddMonths(1).AddDays(-1);
+
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        abertas = await db.Parcelas
+            .Include(p => p.Acordo)!.ThenInclude(a => a!.Cliente)
+            .Where(p => !p.Paga)
+            .ToListAsync();
+
+        vencidas = abertas.Where(p => p.DataVencimento < hoje).OrderBy(p => p.DataVencimento).ToList();
+        proximasParcelas = abertas.OrderBy(p => p.DataVencimento).Take(8).ToList();
+
+        recebidoMes = await db.Parcelas
+            .Where(p => p.Paga && p.DataPagamento >= inicioMes && p.DataPagamento <= fimMes)
+            .SumAsync(p => (decimal?)(p.ValorPago ?? p.Valor)) ?? 0;
+
+        eventos = await db.Eventos
+            .Include(e => e.Cliente)
+            .Where(e => !e.Concluido)
+            .ToListAsync();
+
+        proximosEventos = eventos
+            .Where(e => e.DataHora >= DateTime.Today)
+            .OrderBy(e => e.DataHora)
+            .Take(8)
+            .ToList();
+
+        carregando = false;
+    }
+
+    private decimal SomaAbertas(Func<Parcela, bool> filtro) => abertas.Where(filtro).Sum(p => p.Valor);
+    private int ContaAbertas(Func<Parcela, bool> filtro) => abertas.Count(filtro);
+
+    private int ContaEventos(Func<DateOnly, bool> filtro) =>
+        eventos.Count(e => filtro(DateOnly.FromDateTime(e.DataHora)));
+
+    private static string TipoNome(TipoEvento t) => t switch
+    {
+        TipoEvento.Reuniao => "Reunião",
+        TipoEvento.Audiencia => "Audiência",
+        _ => "Outro"
+    };
+
+    private static string TipoCor(TipoEvento t) => t switch
+    {
+        TipoEvento.Reuniao => "bg-primary",
+        TipoEvento.Audiencia => "bg-danger",
+        _ => "bg-secondary"
+    };
+}

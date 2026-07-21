@@ -1,0 +1,16 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# Local config (a connection string real fica em user-secrets / variável de ambiente)
+appsettings.*.local.json
+
+# SQLite antigo (não usado)
+Data/app.db

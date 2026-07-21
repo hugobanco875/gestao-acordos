@@ -1,0 +1,12 @@
+# Configuração para deploy no Render (https://render.com) — plano gratuito.
+# Ao conectar o repositório, o Render lê este arquivo automaticamente (Blueprint).
+services:
+  - type: web
+    name: gestao-acordos
+    runtime: docker
+    plan: free
+    region: virginia          # região gratuita mais próxima do Brasil
+    healthCheckPath: /Account/Login
+    envVars:
+      - key: ConnectionStrings__DefaultConnection
+        sync: false           # você define o valor (secreto) no painel do Render

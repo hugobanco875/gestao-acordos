@@ -1,0 +1,38 @@
+﻿@inherits LayoutComponentBase
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="me-3 text-muted d-none d-sm-inline">
+                        <i class="bi bi-person-circle"></i> @context.User.Identity?.Name
+                    </span>
+                    <form action="Account/Logout" method="post">
+                        <AntiforgeryToken />
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-box-arrow-right"></i> Sair
+                        </button>
+                    </form>
+                </Authorized>
+                <NotAuthorized>
+                    <a href="Account/Login" class="btn btn-sm btn-primary">Entrar</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
