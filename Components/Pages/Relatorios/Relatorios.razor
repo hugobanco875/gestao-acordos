@@ -7,17 +7,25 @@
 
 <PageTitle>Relatórios</PageTitle>
 
-<h1 class="h3 mb-3"><i class="bi bi-file-earmark-bar-graph"></i> Relatório de Parcelas Baixadas</h1>
+<h1 class="h3 mb-3"><i class="bi bi-file-earmark-bar-graph"></i> Relatório de Parcelas</h1>
 
 <div class="card mb-3">
     <div class="card-body">
         <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Situação</label>
+                <select class="form-select form-select-sm" @bind="situacao">
+                    <option value="todas">Todas</option>
+                    <option value="baixadas">Baixadas (pagas)</option>
+                    <option value="aberto">Em aberto</option>
+                </select>
+            </div>
             <div class="col-6 col-md-2">
-                <label class="form-label small mb-1">Pagas de</label>
+                <label class="form-label small mb-1">De</label>
                 <InputDate class="form-control form-control-sm" @bind-Value="de" />
             </div>
             <div class="col-6 col-md-2">
-                <label class="form-label small mb-1">até</label>
+                <label class="form-label small mb-1">Até</label>
                 <InputDate class="form-control form-control-sm" @bind-Value="ate" />
             </div>
             <div class="col-md-3">
@@ -40,19 +48,23 @@
                     }
                 </select>
             </div>
-            <div class="col-md-2">
-                <button class="btn btn-primary btn-sm w-100" @onclick="Gerar"><i class="bi bi-funnel"></i> Gerar</button>
-            </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-2">
+            <small class="text-muted">
+                Período por @(situacao == "baixadas" ? "data de pagamento" : "vencimento").
+            </small>
+            <button class="btn btn-primary btn-sm" @onclick="Gerar"><i class="bi bi-funnel"></i> Gerar</button>
         </div>
     </div>
 </div>
 
 @if (itens is not null)
 {
-    <div class="d-flex justify-content-between align-items-center flex-wrap mb-2">
+    <div class="d-flex justify-content-between align-items-center flex-wrap mb-2 gap-2">
         <div>
             <span class="me-3">@itens.Count parcela(s)</span>
-            <span>Total recebido: <strong class="text-success">@itens.Sum(i => i.ValorPago ?? i.Valor).ToString("C")</strong></span>
+            <span class="me-3">Recebido: <strong class="text-success">@itens.Where(i => i.Paga).Sum(i => i.ValorPago ?? i.Valor).ToString("C")</strong></span>
+            <span>Em aberto: <strong class="text-danger">@itens.Where(i => !i.Paga).Sum(i => i.Valor).ToString("C")</strong></span>
         </div>
         <div>
             <button class="btn btn-outline-success btn-sm" @onclick="ExportarExcel" disabled="@(itens.Count == 0)"><i class="bi bi-file-earmark-excel"></i> Excel</button>
@@ -62,7 +74,7 @@
 
     @if (itens.Count == 0)
     {
-        <div class="alert alert-info">Nenhuma parcela baixada no período/filtros selecionados.</div>
+        <div class="alert alert-info">Nenhuma parcela para o período/filtros selecionados.</div>
     }
     else
     {
@@ -75,8 +87,9 @@
                         <th class="d-none d-md-table-cell">Processo</th>
                         <th class="text-center">Parc.</th>
                         <th>Vencimento</th>
+                        <th>Situação</th>
                         <th>Pagamento</th>
-                        <th class="text-end">Valor pago</th>
+                        <th class="text-end">Valor</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -88,6 +101,20 @@
                             <td class="d-none d-md-table-cell">@i.NumeroProcesso</td>
                             <td class="text-center">@i.NumeroParcela</td>
                             <td>@i.Vencimento.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                @if (i.Paga)
+                                {
+                                    <span class="badge bg-success">Paga</span>
+                                }
+                                else if (i.Vencimento < hoje)
+                                {
+                                    <span class="badge bg-danger">Vencida</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Em aberto</span>
+                                }
+                            </td>
                             <td>@i.DataPagamento?.ToString("dd/MM/yyyy")</td>
                             <td class="text-end">@((i.ValorPago ?? i.Valor).ToString("C"))</td>
                         </tr>
@@ -95,7 +122,7 @@
                 </tbody>
                 <tfoot>
                     <tr>
-                        <th colspan="6" class="text-end">TOTAL</th>
+                        <th colspan="7" class="text-end">TOTAL</th>
                         <th class="text-end">@itens.Sum(i => i.ValorPago ?? i.Valor).ToString("C")</th>
                     </tr>
                 </tfoot>
@@ -109,10 +136,13 @@
     private List<Cliente> clientes = new();
     private List<RelatorioParcelaItem>? itens;
 
+    private string situacao = "todas";
     private DateOnly de = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private DateOnly ate = DateOnly.FromDateTime(DateTime.Today);
     private int empresaId;
     private int clienteId;
+
+    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
 
     protected override async Task OnInitializedAsync()
     {
@@ -133,17 +163,25 @@
         using var db = await DbFactory.CreateDbContextAsync();
         var q = db.Parcelas
             .Include(p => p.Acordo)!.ThenInclude(a => a!.Cliente)!.ThenInclude(c => c!.Empresa)
-            .Where(p => p.Paga && p.DataPagamento >= de && p.DataPagamento <= ate);
+            .AsQueryable();
 
         if (empresaId > 0)
             q = q.Where(p => p.Acordo!.Cliente!.EmpresaId == empresaId);
         if (clienteId > 0)
             q = q.Where(p => p.Acordo!.ClienteId == clienteId);
 
+        q = situacao switch
+        {
+            "baixadas" => q.Where(p => p.Paga && p.DataPagamento >= de && p.DataPagamento <= ate),
+            "aberto" => q.Where(p => !p.Paga && p.DataVencimento >= de && p.DataVencimento <= ate),
+            _ => q.Where(p => p.DataVencimento >= de && p.DataVencimento <= ate)
+        };
+
         var parcelas = await q
             .OrderBy(p => p.Acordo!.Cliente!.Empresa!.Nome)
             .ThenBy(p => p.Acordo!.Cliente!.Nome)
-            .ThenBy(p => p.DataPagamento)
+            .ThenBy(p => p.DataVencimento)
+            .ThenBy(p => p.Numero)
             .ToListAsync();
 
         itens = parcelas.Select(p => new RelatorioParcelaItem(
@@ -154,14 +192,16 @@
             p.Valor,
             p.DataVencimento,
             p.DataPagamento,
-            p.ValorPago)).ToList();
+            p.ValorPago,
+            p.Paga)).ToList();
     }
 
     private string FiltroDescricao()
     {
+        var sit = situacao switch { "baixadas" => "Baixadas (pagas)", "aberto" => "Em aberto", _ => "Todas" };
         var emp = empresaId == 0 ? "Todas as empresas" : $"Empresa: {empresas.FirstOrDefault(e => e.Id == empresaId)?.Nome}";
         var cli = clienteId == 0 ? "Todos os clientes" : $"Cliente: {clientes.FirstOrDefault(c => c.Id == clienteId)?.Nome}";
-        return $"{emp}  |  {cli}";
+        return $"Situação: {sit}  |  {emp}  |  {cli}";
     }
 
     private async Task ExportarExcel()
@@ -169,7 +209,7 @@
         if (itens is null) return;
         var bytes = Relatorio.GerarExcel(itens, de, ate, FiltroDescricao());
         await JS.InvokeVoidAsync("appDownload.fromBytes",
-            $"parcelas_baixadas_{de:yyyyMMdd}_{ate:yyyyMMdd}.xlsx",
+            $"relatorio_parcelas_{de:yyyyMMdd}_{ate:yyyyMMdd}.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             Convert.ToBase64String(bytes));
     }
@@ -179,7 +219,7 @@
         if (itens is null) return;
         var bytes = Relatorio.GerarPdf(itens, de, ate, FiltroDescricao());
         await JS.InvokeVoidAsync("appDownload.fromBytes",
-            $"parcelas_baixadas_{de:yyyyMMdd}_{ate:yyyyMMdd}.pdf",
+            $"relatorio_parcelas_{de:yyyyMMdd}_{ate:yyyyMMdd}.pdf",
             "application/pdf",
             Convert.ToBase64String(bytes));
     }
