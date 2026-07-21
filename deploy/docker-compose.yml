@@ -1,0 +1,41 @@
+# Sobe o BANCO (PostgreSQL) + a APLICAÇÃO juntos, com um único comando.
+# Uso:
+#   1) copie ".env.exemplo" para ".env" e defina DB_PASSWORD
+#   2) docker compose up -d --build
+#   3) acesse http://SEU_SERVIDOR:8080
+services:
+  db:
+    image: postgres:16
+    container_name: gestaoacordos-db
+    environment:
+      POSTGRES_DB: gestaoacordos
+      POSTGRES_USER: gestao
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gestao -d gestaoacordos"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ..            # usa o Dockerfile na raiz do projeto
+      dockerfile: Dockerfile
+    container_name: gestaoacordos-app
+    environment:
+      # O app acha o banco pelo nome do serviço "db" (rede interna do compose).
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=gestaoacordos;Username=gestao;Password=${DB_PASSWORD}"
+      ASPNETCORE_URLS: "http://+:8080"
+      ASPNETCORE_ENVIRONMENT: "Production"
+    ports:
+      - "8080:8080"          # http://SEU_SERVIDOR:8080
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  dbdata:                    # os dados do banco ficam guardados aqui (não somem ao reiniciar)

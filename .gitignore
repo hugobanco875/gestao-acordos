@@ -14,3 +14,9 @@ appsettings.*.local.json
 
 # SQLite antigo (não usado)
 Data/app.db
+
+# Deploy: senha do banco e saída de publicação
+.env
+deploy/.env
+publicado/
+*.dump
