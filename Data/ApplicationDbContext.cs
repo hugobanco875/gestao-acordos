@@ -1,10 +1,12 @@
 using GestaoAcordos.Models;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace GestaoAcordos.Data;
 
-public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options)
+public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+    : IdentityDbContext<ApplicationUser>(options), IDataProtectionKeyContext
 {
     public DbSet<Empresa> Empresas => Set<Empresa>();
     public DbSet<Cliente> Clientes => Set<Cliente>();
@@ -12,6 +14,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<AcordoPdf> AcordosPdf => Set<AcordoPdf>();
     public DbSet<Parcela> Parcelas => Set<Parcela>();
     public DbSet<Evento> Eventos => Set<Evento>();
+    public DbSet<Configuracao> Configuracoes => Set<Configuracao>();
+
+    // Chaves de proteção de dados (cookies/antiforgery) persistidas no banco,
+    // para sobreviverem a reinícios/deploys (senão o logout dá erro no Render).
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

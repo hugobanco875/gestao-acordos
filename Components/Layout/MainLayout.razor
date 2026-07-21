@@ -1,8 +1,44 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject GestaoAcordos.Services.ConfiguracaoService ConfigSvc
+
+<HeadContent>
+    <style>
+        :root {
+            --cor-primaria: @cfg.CorPrimaria;
+            --cor-menu: @cfg.CorMenu;
+        }
+        .sidebar {
+            background-image: none !important;
+            background-color: var(--cor-menu) !important;
+        }
+        .btn-primary {
+            --bs-btn-bg: var(--cor-primaria);
+            --bs-btn-border-color: var(--cor-primaria);
+            --bs-btn-hover-bg: var(--cor-primaria);
+            --bs-btn-hover-border-color: var(--cor-primaria);
+            --bs-btn-active-bg: var(--cor-primaria);
+            --bs-btn-active-border-color: var(--cor-primaria);
+            --bs-btn-disabled-bg: var(--cor-primaria);
+            --bs-btn-disabled-border-color: var(--cor-primaria);
+        }
+        .btn-outline-primary {
+            --bs-btn-color: var(--cor-primaria);
+            --bs-btn-border-color: var(--cor-primaria);
+            --bs-btn-hover-bg: var(--cor-primaria);
+            --bs-btn-hover-border-color: var(--cor-primaria);
+            --bs-btn-active-bg: var(--cor-primaria);
+            --bs-btn-active-border-color: var(--cor-primaria);
+        }
+        .text-primary { color: var(--cor-primaria) !important; }
+        .bg-primary { background-color: var(--cor-primaria) !important; }
+        .badge.bg-primary { background-color: var(--cor-primaria) !important; }
+        .content a:not(.btn) { color: var(--cor-primaria); }
+    </style>
+</HeadContent>
 
 <div class="page">
     <div class="sidebar">
-        <NavMenu />
+        <NavMenu Config="cfg" />
     </div>
 
     <main>
@@ -32,7 +68,23 @@
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
+    Ocorreu um erro inesperado.
+    <a href="." class="reload">Recarregar</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private Configuracao cfg = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            cfg = await ConfigSvc.ObterAsync();
+        }
+        catch
+        {
+            cfg = new Configuracao();
+        }
+    }
+}

@@ -2,6 +2,8 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject CnpjService Cnpj
+@inject EnderecoService Endereco
 @inject IJSRuntime JS
 
 <PageTitle>Empresas</PageTitle>
@@ -60,7 +62,7 @@ else
 @if (editando)
 {
     <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <EditForm Model="modelo" OnValidSubmit="Salvar">
                     <DataAnnotationsValidator />
@@ -69,15 +71,36 @@ else
                         <button type="button" class="btn-close" @onclick="Cancelar"></button>
                     </div>
                     <div class="modal-body">
+                        <div class="mb-2">
+                            <label class="form-label">CNPJ</label>
+                            <div class="input-group">
+                                <InputText class="form-control" @bind-Value="modelo.CnpjCpf" placeholder="00.000.000/0000-00" />
+                                <button type="button" class="btn btn-outline-primary" @onclick="BuscarCnpj" disabled="@buscandoCnpj" title="Buscar dados pelo CNPJ">
+                                    @if (buscandoCnpj)
+                                    {
+                                        <span class="spinner-border spinner-border-sm"></span> <text> Buscando...</text>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-cloud-download"></i> <text> Buscar dados</text>
+                                    }
+                                </button>
+                            </div>
+                            <small class="text-muted">Informe o CNPJ e clique em "Buscar dados" para preencher automaticamente.</small>
+                        </div>
+                        @if (cnpjMsg is not null)
+                        {
+                            <div class="text-danger small mb-2">@cnpjMsg</div>
+                        }
                         <div class="mb-3">
-                            <label class="form-label">Nome *</label>
+                            <label class="form-label">Razão social / Nome *</label>
                             <InputText class="form-control" @bind-Value="modelo.Nome" />
                             <ValidationMessage For="() => modelo.Nome" />
                         </div>
                         <div class="row g-2">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">CNPJ/CPF</label>
-                                <InputText class="form-control" @bind-Value="modelo.CnpjCpf" />
+                                <label class="form-label">Nome fantasia</label>
+                                <InputText class="form-control" @bind-Value="modelo.NomeFantasia" />
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Telefone</label>
@@ -89,6 +112,49 @@ else
                             <InputText class="form-control" @bind-Value="modelo.Email" />
                             <ValidationMessage For="() => modelo.Email" />
                         </div>
+
+                        <hr />
+                        <div class="row g-2">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">CEP</label>
+                                <div class="input-group">
+                                    <InputText class="form-control" @bind-Value="modelo.Cep" placeholder="00000-000" />
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="BuscarCep" disabled="@buscandoCep" title="Buscar endereço pelo CEP">
+                                        @if (buscandoCep)
+                                        {
+                                            <span class="spinner-border spinner-border-sm"></span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-search"></i>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Endereço</label>
+                                <InputText class="form-control" @bind-Value="modelo.Logradouro" />
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">Nº</label>
+                                <InputText class="form-control" @bind-Value="modelo.Numero" />
+                            </div>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Bairro</label>
+                                <InputText class="form-control" @bind-Value="modelo.Bairro" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Cidade</label>
+                                <InputText class="form-control" @bind-Value="modelo.Cidade" />
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">UF</label>
+                                <InputText class="form-control" @bind-Value="modelo.Uf" maxlength="2" />
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label">Observações</label>
                             <InputTextArea class="form-control" rows="2" @bind-Value="modelo.Observacoes" />
@@ -112,6 +178,9 @@ else
     private List<Empresa>? empresas;
     private bool editando;
     private Empresa modelo = new();
+    private bool buscandoCnpj;
+    private bool buscandoCep;
+    private string? cnpjMsg;
 
     protected override async Task OnInitializedAsync() => await Carregar();
 
@@ -127,6 +196,7 @@ else
     private void Novo()
     {
         modelo = new Empresa();
+        cnpjMsg = null;
         editando = true;
     }
 
@@ -137,16 +207,76 @@ else
             Id = e.Id,
             Nome = e.Nome,
             CnpjCpf = e.CnpjCpf,
+            NomeFantasia = e.NomeFantasia,
             Telefone = e.Telefone,
             Email = e.Email,
+            Cep = e.Cep,
+            Logradouro = e.Logradouro,
+            Numero = e.Numero,
+            Bairro = e.Bairro,
+            Cidade = e.Cidade,
+            Uf = e.Uf,
             Observacoes = e.Observacoes,
             Ativo = e.Ativo,
             CriadoEm = e.CriadoEm
         };
+        cnpjMsg = null;
         editando = true;
     }
 
     private void Cancelar() => editando = false;
+
+    private async Task BuscarCnpj()
+    {
+        cnpjMsg = null;
+        buscandoCnpj = true;
+        try
+        {
+            var d = await Cnpj.BuscarAsync(modelo.CnpjCpf);
+            if (d is null)
+            {
+                cnpjMsg = "CNPJ não encontrado (verifique o número).";
+                return;
+            }
+            if (!string.IsNullOrWhiteSpace(d.RazaoSocial)) modelo.Nome = d.RazaoSocial;
+            if (!string.IsNullOrWhiteSpace(d.NomeFantasia)) modelo.NomeFantasia = d.NomeFantasia;
+            if (!string.IsNullOrWhiteSpace(d.Telefone)) modelo.Telefone = d.Telefone;
+            if (!string.IsNullOrWhiteSpace(d.Email)) modelo.Email = d.Email;
+            if (!string.IsNullOrWhiteSpace(d.Cep)) modelo.Cep = d.Cep;
+            if (!string.IsNullOrWhiteSpace(d.Logradouro)) modelo.Logradouro = d.Logradouro;
+            if (!string.IsNullOrWhiteSpace(d.Numero)) modelo.Numero = d.Numero;
+            if (!string.IsNullOrWhiteSpace(d.Bairro)) modelo.Bairro = d.Bairro;
+            if (!string.IsNullOrWhiteSpace(d.Cidade)) modelo.Cidade = d.Cidade;
+            if (!string.IsNullOrWhiteSpace(d.Uf)) modelo.Uf = d.Uf;
+        }
+        finally
+        {
+            buscandoCnpj = false;
+        }
+    }
+
+    private async Task BuscarCep()
+    {
+        cnpjMsg = null;
+        buscandoCep = true;
+        try
+        {
+            var end = await Endereco.BuscarCepAsync(modelo.Cep);
+            if (end is null)
+            {
+                cnpjMsg = "CEP não encontrado.";
+                return;
+            }
+            modelo.Logradouro = end.Logradouro;
+            modelo.Bairro = end.Bairro;
+            modelo.Cidade = end.Cidade;
+            modelo.Uf = end.Uf;
+        }
+        finally
+        {
+            buscandoCep = false;
+        }
+    }
 
     private async Task Salvar()
     {

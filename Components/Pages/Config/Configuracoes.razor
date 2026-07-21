@@ -1,0 +1,81 @@
+@page "/configuracoes"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject GestaoAcordos.Services.ConfiguracaoService ConfigSvc
+@inject IJSRuntime JS
+
+<PageTitle>Aparência</PageTitle>
+
+<h1 class="h3 mb-3"><i class="bi bi-palette"></i> Aparência do sistema</h1>
+
+<div class="card" style="max-width:680px">
+    <div class="card-body">
+        <EditForm Model="cfg" OnValidSubmit="Salvar">
+            <div class="mb-3">
+                <label class="form-label">Nome do sistema</label>
+                <InputText class="form-control" @bind-Value="cfg.NomeSistema" />
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Cor principal <small class="text-muted">(botões, destaques)</small></label>
+                    <div class="input-group">
+                        <input type="color" class="form-control form-control-color" @bind="cfg.CorPrimaria" />
+                        <InputText class="form-control" @bind-Value="cfg.CorPrimaria" />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Cor do menu lateral</label>
+                    <div class="input-group">
+                        <input type="color" class="form-control form-control-color" @bind="cfg.CorMenu" />
+                        <InputText class="form-control" @bind-Value="cfg.CorMenu" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <p class="text-muted mb-1">Prévia:</p>
+                <div class="d-flex align-items-center gap-2 p-3 rounded" style="background:@cfg.CorMenu">
+                    <i class="bi bi-briefcase-fill text-white"></i>
+                    <span class="text-white fw-semibold">@cfg.NomeSistema</span>
+                    <button type="button" class="btn btn-sm ms-auto text-white" style="background:@cfg.CorPrimaria; border-color:@cfg.CorPrimaria">Botão exemplo</button>
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button type="button" class="btn btn-outline-secondary" @onclick="Restaurar">Restaurar padrão</button>
+                <button type="submit" class="btn btn-primary" disabled="@salvando">
+                    @if (salvando)
+                    {
+                        <span class="spinner-border spinner-border-sm"></span> <text> Aplicando...</text>
+                    }
+                    else
+                    {
+                        <i class="bi bi-check-lg"></i> <text> Salvar e aplicar</text>
+                    }
+                </button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private Configuracao cfg = new();
+    private bool salvando;
+
+    protected override async Task OnInitializedAsync() => cfg = await ConfigSvc.ObterAsync();
+
+    private async Task Salvar()
+    {
+        salvando = true;
+        await ConfigSvc.SalvarAsync(cfg);
+        // Recarrega para aplicar o tema em toda a interface.
+        await JS.InvokeVoidAsync("location.reload");
+    }
+
+    private void Restaurar()
+    {
+        cfg.NomeSistema = "Gestão de Acordos";
+        cfg.CorPrimaria = "#0d6efd";
+        cfg.CorMenu = "#1b2a4a";
+    }
+}

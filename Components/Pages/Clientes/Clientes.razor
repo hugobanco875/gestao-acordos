@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject EnderecoService Endereco
 @inject IJSRuntime JS
 
 <PageTitle>Clientes</PageTitle>
@@ -115,6 +116,59 @@ else
                             <InputText class="form-control" @bind-Value="modelo.Email" />
                             <ValidationMessage For="() => modelo.Email" />
                         </div>
+
+                        <hr />
+                        <div class="row g-2">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">CEP</label>
+                                <div class="input-group">
+                                    <InputText class="form-control" @bind-Value="modelo.Cep" placeholder="00000-000" />
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="BuscarCep" disabled="@buscandoCep" title="Buscar endereço pelo CEP">
+                                        @if (buscandoCep)
+                                        {
+                                            <span class="spinner-border spinner-border-sm"></span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-search"></i>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-8 mb-3">
+                                <label class="form-label">Endereço</label>
+                                <InputText class="form-control" @bind-Value="modelo.Logradouro" />
+                            </div>
+                        </div>
+                        @if (cepMsg is not null)
+                        {
+                            <div class="text-danger small mb-2">@cepMsg</div>
+                        }
+                        <div class="row g-2">
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Número</label>
+                                <InputText class="form-control" @bind-Value="modelo.Numero" />
+                            </div>
+                            <div class="col-md-5 mb-3">
+                                <label class="form-label">Complemento</label>
+                                <InputText class="form-control" @bind-Value="modelo.Complemento" />
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Bairro</label>
+                                <InputText class="form-control" @bind-Value="modelo.Bairro" />
+                            </div>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-9 mb-3">
+                                <label class="form-label">Cidade</label>
+                                <InputText class="form-control" @bind-Value="modelo.Cidade" />
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">UF</label>
+                                <InputText class="form-control" @bind-Value="modelo.Uf" maxlength="2" />
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label">Observações</label>
                             <InputTextArea class="form-control" rows="2" @bind-Value="modelo.Observacoes" />
@@ -136,6 +190,8 @@ else
     private bool editando;
     private Cliente modelo = new();
     private string busca = "";
+    private bool buscandoCep;
+    private string? cepMsg;
 
     protected override async Task OnInitializedAsync() => await Carregar();
 
@@ -153,6 +209,7 @@ else
     private void Novo()
     {
         modelo = new Cliente();
+        cepMsg = null;
         editando = true;
     }
 
@@ -166,13 +223,44 @@ else
             CpfCnpj = c.CpfCnpj,
             Telefone = c.Telefone,
             Email = c.Email,
+            Cep = c.Cep,
+            Logradouro = c.Logradouro,
+            Numero = c.Numero,
+            Complemento = c.Complemento,
+            Bairro = c.Bairro,
+            Cidade = c.Cidade,
+            Uf = c.Uf,
             Observacoes = c.Observacoes,
             CriadoEm = c.CriadoEm
         };
+        cepMsg = null;
         editando = true;
     }
 
     private void Cancelar() => editando = false;
+
+    private async Task BuscarCep()
+    {
+        cepMsg = null;
+        buscandoCep = true;
+        try
+        {
+            var end = await Endereco.BuscarCepAsync(modelo.Cep);
+            if (end is null)
+            {
+                cepMsg = "CEP não encontrado.";
+                return;
+            }
+            modelo.Logradouro = end.Logradouro;
+            modelo.Bairro = end.Bairro;
+            modelo.Cidade = end.Cidade;
+            modelo.Uf = end.Uf;
+        }
+        finally
+        {
+            buscandoCep = false;
+        }
+    }
 
     private async Task Salvar()
     {

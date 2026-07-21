@@ -29,6 +29,34 @@ public class Cliente
     [Display(Name = "E-mail")]
     public string? Email { get; set; }
 
+    [StringLength(10)]
+    [Display(Name = "CEP")]
+    public string? Cep { get; set; }
+
+    [StringLength(200)]
+    [Display(Name = "Endereço")]
+    public string? Logradouro { get; set; }
+
+    [StringLength(20)]
+    [Display(Name = "Número")]
+    public string? Numero { get; set; }
+
+    [StringLength(100)]
+    [Display(Name = "Complemento")]
+    public string? Complemento { get; set; }
+
+    [StringLength(100)]
+    [Display(Name = "Bairro")]
+    public string? Bairro { get; set; }
+
+    [StringLength(100)]
+    [Display(Name = "Cidade")]
+    public string? Cidade { get; set; }
+
+    [StringLength(2)]
+    [Display(Name = "UF")]
+    public string? Uf { get; set; }
+
     [StringLength(500)]
     [Display(Name = "Observações")]
     public string? Observacoes { get; set; }
