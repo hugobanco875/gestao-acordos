@@ -11,6 +11,9 @@ using GestaoAcordos.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Permite rodar como Servico do Windows (no-op no Linux/Docker/console).
+builder.Services.AddWindowsService(o => o.ServiceName = "GestaoAcordos");
+
 // Licenca gratuita do QuestPDF (geracao de PDF dos relatorios).
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 

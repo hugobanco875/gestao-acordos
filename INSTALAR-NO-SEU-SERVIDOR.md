@@ -48,6 +48,9 @@ O banco fica salvo em um volume do Docker (não some ao reiniciar). O app cria a
 
 Use este se preferir instalar direto no Windows Server / Linux, sem Docker.
 
+> 🪟 **No Windows há scripts prontos** que fazem os passos 3 a 6 automaticamente
+> (publicar + instalar como serviço): veja **[`deploy/windows/LEIA-ME.md`](deploy/windows/LEIA-ME.md)**.
+
 ### 1. Instalar o banco
 Siga **[`database/LEIA-ME.md`](database/LEIA-ME.md)**: instalar PostgreSQL, criar o banco `gestaoacordos` e o usuário `gestao`.
 
@@ -85,11 +88,10 @@ Acesse **http://SEU_SERVIDOR:8080**. O app cria as tabelas sozinho na primeira v
 ### 6. Deixar rodando sempre (serviço)
 Para não precisar deixar uma janela aberta:
 
-- **Windows** — como serviço, com o **NSSM** (https://nssm.cc):
-  ```
-  nssm install GestaoAcordos "C:\Program Files\dotnet\dotnet.exe" "C:\caminho\publicado\GestaoAcordos.dll"
-  nssm start GestaoAcordos
-  ```
+- **Windows** — use os scripts prontos em **`deploy/windows/`**:
+  1. `publicar.bat` (numa máquina com o SDK) → gera a pasta `publicado`
+  2. copie `publicado` para `C:\GestaoAcordos`
+  3. edite e rode `instalar-servico.bat` **como administrador** (cria o serviço, libera o firewall e inicia)
 - **Linux** — crie `/etc/systemd/system/gestaoacordos.service`:
   ```ini
   [Unit]
