@@ -32,9 +32,9 @@ else
         <div class="col-6 col-lg"><div class="card text-center h-100"><div class="card-body py-3"><div class="small text-muted">Parcelas pagas</div><div class="fw-bold">@ParcelasPagas/@ParcelasTotais</div></div></div></div>
     </div>
 
-    @if (acordo.TemPdf)
+    @if (QuantidadeArquivos > 0)
     {
-        <button class="btn btn-outline-info btn-sm mb-3" @onclick="VerPdf"><i class="bi bi-file-earmark-pdf"></i> Ver PDF do acordo</button>
+        <button class="btn btn-outline-info btn-sm mb-3" @onclick="AbrirArquivos"><i class="bi bi-folder2-open"></i> Arquivos (@QuantidadeArquivos)</button>
     }
 
     <h2 class="h5 mb-3">Extrato financeiro</h2>
@@ -73,6 +73,26 @@ else
                 }
             </tbody>
         </table>
+    </div>
+}
+
+@if (arquivosAbertos && acordo is not null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(15,23,42,.55);backdrop-filter:blur(3px)">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content border-0 shadow-lg">
+            <div class="modal-header"><h5 class="modal-title"><i class="bi bi-folder2-open"></i> Arquivos do acordo</h5><button class="btn-close" @onclick="FecharArquivos"></button></div>
+            <div class="modal-body p-0"><div class="list-group list-group-flush">
+                @if (acordo.TemPdf)
+                {
+                    <div class="list-group-item d-flex align-items-center justify-content-between gap-2 py-3"><div class="min-w-0"><div class="fw-semibold text-truncate">@(acordo.PdfNomeArquivo ?? "acordo.pdf")</div><div class="small text-muted">Arquivo legado</div></div><button class="btn btn-sm btn-primary flex-shrink-0" @onclick="ExibirPdfLegado"><i class="bi bi-eye"></i> Exibir</button></div>
+                }
+                @foreach (var arquivo in anexosResumo)
+                {
+                    <div class="list-group-item d-flex align-items-center justify-content-between gap-2 py-3"><div class="min-w-0"><div class="fw-semibold text-truncate">@arquivo.NomeArquivo</div><div class="small text-muted">@FormatarTamanho(arquivo.TamanhoBytes)</div></div><button class="btn btn-sm btn-primary flex-shrink-0" @onclick="() => ExibirAnexo(arquivo.Id)"><i class="bi bi-eye"></i> Exibir</button></div>
+                }
+            </div></div>
+            <div class="modal-footer"><button class="btn btn-secondary" @onclick="FecharArquivos">Fechar</button></div>
+        </div></div>
     </div>
 }
 
@@ -123,9 +143,15 @@ else
     private decimal EmAberto => Math.Max(0, (acordo?.ValorTotal ?? 0) - Recebido);
     private int ParcelasPagas => acordo?.Parcelas.Count(p => p.Tipo == TipoMovimentoFinanceiro.Parcela && p.Paga) ?? 0;
     private int ParcelasTotais => acordo?.Parcelas.Count(p => p.Tipo == TipoMovimentoFinanceiro.Parcela) ?? 0;
+    private sealed class AnexoResumo { public int Id { get; init; } public string NomeArquivo { get; init; } = string.Empty; public long TamanhoBytes { get; init; } }
+    private List<AnexoResumo> anexosResumo = new();
+    private int QuantidadeArquivos => anexosResumo.Count + (acordo?.TemPdf == true ? 1 : 0);
+    private bool arquivosAbertos;
+    private void AbrirArquivos() => arquivosAbertos = true;
+    private void FecharArquivos() => arquivosAbertos = false;
 
     protected override async Task OnParametersSetAsync() => await Carregar();
-    private async Task Carregar(){using var db=await DbFactory.CreateDbContextAsync();acordo=await db.Acordos.Include(a=>a.Cliente).Include(a=>a.Empresa).Include(a=>a.Parcelas).FirstOrDefaultAsync(a=>a.Id==Id);}
+    private async Task Carregar(){using var db=await DbFactory.CreateDbContextAsync();acordo=await db.Acordos.Include(a=>a.Cliente).Include(a=>a.Empresa).Include(a=>a.Parcelas).FirstOrDefaultAsync(a=>a.Id==Id);anexosResumo=await db.AcordoAnexos.AsNoTracking().Where(x=>x.AcordoId==Id).OrderByDescending(x=>x.EnviadoEm).Select(x=>new AnexoResumo{Id=x.Id,NomeArquivo=x.NomeArquivo,TamanhoBytes=x.TamanhoBytes}).ToListAsync();}
     private string LinhaClasse(Parcela p)=>p.Paga?"table-success":p.DataVencimento<hoje?"table-warning":"";
 
     private bool novaEntradaAberta, salvandoEntrada;
@@ -143,7 +169,9 @@ else
     private void SolicitarConfirmacao(Parcela p,bool estorno){parcelaConfirmacao=p;confirmandoEstorno=estorno;dataConfirmacao=hoje;formaConfirmacao=p.FormaPagamento==FormaPagamento.NaoInformada?FormaPagamento.Pix:p.FormaPagamento;}
     private void CancelarConfirmacao(){parcelaConfirmacao=null;confirmandoEstorno=false;}
     private async Task ConfirmarAcao(){if(parcelaConfirmacao is null)return;using var db=await DbFactory.CreateDbContextAsync();var p=await db.Parcelas.FirstOrDefaultAsync(x=>x.Id==parcelaConfirmacao.Id);if(p is null){CancelarConfirmacao();return;}if(confirmandoEstorno){p.Paga=false;p.DataPagamento=null;p.ValorPago=null;}else{p.Paga=true;p.DataPagamento=dataConfirmacao;p.ValorPago=p.Valor;p.FormaPagamento=formaConfirmacao;}await db.SaveChangesAsync();CancelarConfirmacao();await Carregar();}
-    private async Task VerPdf(){using var db=await DbFactory.CreateDbContextAsync();var pdf=await db.AcordosPdf.FirstOrDefaultAsync(p=>p.AcordoId==Id);if(pdf is null){await JS.InvokeVoidAsync("alert","PDF não encontrado.");return;}await JS.InvokeVoidAsync("appDownload.openPdf",Convert.ToBase64String(pdf.Conteudo));}
+    private async Task ExibirAnexo(int anexoId){using var db=await DbFactory.CreateDbContextAsync();var anexo=await db.AcordoAnexos.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==anexoId);if(anexo is null){await JS.InvokeVoidAsync("alert","Arquivo não encontrado.");return;}await JS.InvokeVoidAsync("appDownload.openPdf",Convert.ToBase64String(anexo.Conteudo));}
+    private async Task ExibirPdfLegado(){using var db=await DbFactory.CreateDbContextAsync();var pdf=await db.AcordosPdf.AsNoTracking().FirstOrDefaultAsync(p=>p.AcordoId==Id);if(pdf is null){await JS.InvokeVoidAsync("alert","Arquivo não encontrado.");return;}await JS.InvokeVoidAsync("appDownload.openPdf",Convert.ToBase64String(pdf.Conteudo));}
+    private static string FormatarTamanho(long bytes)=>bytes<1024*1024?$"{bytes/1024d:N0} KB":$"{bytes/1024d/1024d:N1} MB";
     private async Task VerComprovante(int parcelaId){using var db=await DbFactory.CreateDbContextAsync();var p=await db.Parcelas.FirstOrDefaultAsync(x=>x.Id==parcelaId);var arq=await db.ParcelaComprovantes.FirstOrDefaultAsync(x=>x.ParcelaId==parcelaId);if(p is null||arq is null){await JS.InvokeVoidAsync("alert","Comprovante não encontrado.");return;}if((p.ComprovanteContentType??"").Contains("pdf"))await JS.InvokeVoidAsync("appDownload.openPdf",Convert.ToBase64String(arq.Conteudo));else await JS.InvokeVoidAsync("appDownload.fromBytes",p.ComprovanteNomeArquivo??"comprovante",p.ComprovanteContentType??"application/octet-stream",Convert.ToBase64String(arq.Conteudo));}
     private static string NomeForma(FormaPagamento f) => FormasPagamento.Nome(f);
 }

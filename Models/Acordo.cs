@@ -61,6 +61,7 @@ public class Acordo
 
     public List<Parcela> Parcelas { get; set; } = new();
     public AcordoPdf? Pdf { get; set; }
+    public List<AcordoAnexo> Anexos { get; set; } = new();
 
     public bool TemPdf => !string.IsNullOrEmpty(PdfNomeArquivo);
 }

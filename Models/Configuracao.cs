@@ -17,7 +17,7 @@ public class Configuracao
 
     [StringLength(12)]
     [Display(Name = "Tema")]
-    public string Tema { get; set; } = "automatico";
+    public string Tema { get; set; } = "claro";
 
     /// <summary>Logomarca personalizada em formato Data URL (PNG, JPEG ou WebP).</summary>
     public string? LogoDataUrl { get; set; }

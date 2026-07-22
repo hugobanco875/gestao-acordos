@@ -67,17 +67,17 @@ else
                                 <span class="badge @(pagas == a.Parcelas.Count ? "bg-success" : "bg-warning text-dark")">
                                     @pagas/@a.Parcelas.Count parcelas pagas
                                 </span>
-                                @if (a.TemPdf)
+                                @if (QuantidadeArquivos(a) > 0)
                                 {
-                                    <span class="badge bg-info text-dark"><i class="bi bi-file-earmark-pdf"></i> PDF anexado</span>
+                                    <span class="badge bg-info text-dark">@QuantidadeArquivos(a) arquivo(s)</span>
                                 }
                             </div>
                         </div>
                         <div class="text-nowrap">
                             <a class="btn btn-sm btn-outline-success" href="acordos/@a.Id" title="Ver parcelas"><i class="bi bi-list-check"></i> Parcelas</a>
-                            @if (a.TemPdf)
+                            @if (QuantidadeArquivos(a) > 0)
                             {
-                                <button class="btn btn-sm btn-outline-info" @onclick="() => VerPdf(a.Id)" title="Ver PDF do acordo"><i class="bi bi-file-earmark-pdf"></i></button>
+                                <button class="btn btn-sm btn-outline-info" @onclick="() => AbrirArquivos(a)" title="Ver arquivos"><i class="bi bi-folder2-open"></i> Arquivos</button>
                             }
                             <a class="btn btn-sm btn-outline-primary" href="acordos/@a.Id/editar" title="Editar"><i class="bi bi-pencil"></i></a>
                             <button class="btn btn-sm btn-outline-danger" @onclick="() => ExcluirAcordo(a)" title="Excluir"><i class="bi bi-trash"></i></button>
@@ -87,6 +87,29 @@ else
             </div>
         }
     }
+}
+
+@if (acordoArquivos is not null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(15,23,42,.55);backdrop-filter:blur(3px)">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header"><h5 class="modal-title"><i class="bi bi-folder2-open"></i> Arquivos do acordo</h5><button class="btn-close" @onclick="FecharArquivos"></button></div>
+                <div class="modal-body p-0">
+                    <div class="list-group list-group-flush">
+                        @foreach (var arquivo in arquivosModal)
+                        {
+                            <div class="list-group-item d-flex align-items-center justify-content-between gap-2 py-3">
+                                <div class="min-w-0"><div class="fw-semibold text-truncate">@arquivo.Nome</div><div class="small text-muted">@FormatarTamanho(arquivo.Tamanho)</div></div>
+                                <button class="btn btn-sm btn-primary flex-shrink-0" @onclick="() => ExibirArquivo(arquivo)"><i class="bi bi-eye"></i> Exibir</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer"><button class="btn btn-secondary" @onclick="FecharArquivos">Fechar</button></div>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
@@ -105,19 +128,56 @@ else
             .Include(c => c.Acordos).ThenInclude(a => a.Empresa)
             .Include(c => c.Acordos).ThenInclude(a => a.Parcelas)
             .FirstOrDefaultAsync(c => c.Id == Id);
+
+        contagemAnexos.Clear();
+        if (cliente is not null)
+        {
+            var ids = cliente.Acordos.Select(x => x.Id).ToList();
+            if (ids.Count > 0)
+            {
+                var contagens = await db.AcordoAnexos.AsNoTracking()
+                    .Where(x => ids.Contains(x.AcordoId))
+                    .GroupBy(x => x.AcordoId)
+                    .Select(g => new { AcordoId = g.Key, Quantidade = g.Count() })
+                    .ToListAsync();
+                foreach (var item in contagens) contagemAnexos[item.AcordoId] = item.Quantidade;
+            }
+        }
     }
 
-    private async Task VerPdf(int acordoId)
+    private Acordo? acordoArquivos;
+    private readonly Dictionary<int, int> contagemAnexos = new();
+    private List<ArquivoModal> arquivosModal = new();
+    private sealed class ArquivoModal { public int Id { get; init; } public string Nome { get; init; } = string.Empty; public long Tamanho { get; init; } public bool Legado { get; init; } }
+
+    private int QuantidadeArquivos(Acordo acordo) => contagemAnexos.GetValueOrDefault(acordo.Id) + (acordo.TemPdf ? 1 : 0);
+
+    private async Task AbrirArquivos(Acordo acordo)
+    {
+        acordoArquivos = acordo;
+        using var db = await DbFactory.CreateDbContextAsync();
+        arquivosModal = await db.AcordoAnexos.AsNoTracking()
+            .Where(x => x.AcordoId == acordo.Id)
+            .OrderByDescending(x => x.EnviadoEm)
+            .Select(x => new ArquivoModal { Id = x.Id, Nome = x.NomeArquivo, Tamanho = x.TamanhoBytes })
+            .ToListAsync();
+        if (acordo.TemPdf)
+            arquivosModal.Insert(0, new ArquivoModal { Id = acordo.Id, Nome = acordo.PdfNomeArquivo ?? "acordo.pdf", Legado = true });
+    }
+
+    private void FecharArquivos() { acordoArquivos = null; arquivosModal.Clear(); }
+
+    private async Task ExibirArquivo(ArquivoModal arquivo)
     {
         using var db = await DbFactory.CreateDbContextAsync();
-        var pdf = await db.AcordosPdf.FirstOrDefaultAsync(p => p.AcordoId == acordoId);
-        if (pdf is null)
-        {
-            await JS.InvokeVoidAsync("alert", "PDF não encontrado.");
-            return;
-        }
-        await JS.InvokeVoidAsync("appDownload.openPdf", Convert.ToBase64String(pdf.Conteudo));
+        byte[]? conteudo = arquivo.Legado
+            ? (await db.AcordosPdf.AsNoTracking().FirstOrDefaultAsync(x => x.AcordoId == arquivo.Id))?.Conteudo
+            : (await db.AcordoAnexos.AsNoTracking().FirstOrDefaultAsync(x => x.Id == arquivo.Id))?.Conteudo;
+        if (conteudo is null) { await JS.InvokeVoidAsync("alert", "Arquivo não encontrado."); return; }
+        await JS.InvokeVoidAsync("appDownload.openPdf", Convert.ToBase64String(conteudo));
     }
+
+    private static string FormatarTamanho(long bytes) => bytes <= 0 ? "Arquivo legado" : bytes < 1024 * 1024 ? $"{bytes / 1024d:N0} KB" : $"{bytes / 1024d / 1024d:N1} MB";
 
     private async Task ExcluirAcordo(Acordo a)
     {

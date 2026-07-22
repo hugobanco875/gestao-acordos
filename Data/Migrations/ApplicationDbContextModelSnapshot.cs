@@ -131,6 +131,43 @@ namespace GestaoAcordos.Data.Migrations
                     b.ToTable("Acordos");
                 });
 
+
+            modelBuilder.Entity("GestaoAcordos.Models.AcordoAnexo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AcordoId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<byte[]>("Conteudo")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTime>("EnviadoEm")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("NomeArquivo")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<long>("TamanhoBytes")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+                    b.HasIndex("AcordoId");
+                    b.ToTable("AcordoAnexos");
+                });
+
             modelBuilder.Entity("GestaoAcordos.Models.AcordoPdf", b =>
                 {
                     b.Property<int>("AcordoId")
@@ -592,6 +629,18 @@ namespace GestaoAcordos.Data.Migrations
                     b.Navigation("Cliente");
                 });
 
+
+            modelBuilder.Entity("GestaoAcordos.Models.AcordoAnexo", b =>
+                {
+                    b.HasOne("GestaoAcordos.Models.Acordo", "Acordo")
+                        .WithMany("Anexos")
+                        .HasForeignKey("AcordoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Acordo");
+                });
+
             modelBuilder.Entity("GestaoAcordos.Models.AcordoPdf", b =>
                 {
                     b.HasOne("GestaoAcordos.Models.Acordo", "Acordo")
@@ -695,6 +744,8 @@ namespace GestaoAcordos.Data.Migrations
 
             modelBuilder.Entity("GestaoAcordos.Models.Acordo", b =>
                 {
+                    b.Navigation("Anexos");
+
                     b.Navigation("Parcelas");
 
                     b.Navigation("Pdf");

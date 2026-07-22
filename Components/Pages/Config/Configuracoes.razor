@@ -72,10 +72,6 @@
                                 <InputRadio Value='@("escuro")' />
                                 <span><i class="bi bi-moon-stars"></i><strong>Escuro</strong><small>Interface sempre escura</small></span>
                             </label>
-                            <label class="theme-option">
-                                <InputRadio Value='@("automatico")' />
-                                <span><i class="bi bi-circle-half"></i><strong>Automático</strong><small>Segue o aparelho</small></span>
-                            </label>
                         </InputRadioGroup>
                     </div>
 
@@ -197,7 +193,7 @@
         salvando = true;
         cfg.NomeSistema = string.IsNullOrWhiteSpace(cfg.NomeSistema) ? "Gestão de Acordos" : cfg.NomeSistema.Trim();
         cfg.SubtituloSistema = string.IsNullOrWhiteSpace(cfg.SubtituloSistema) ? "Advocacia especializada" : cfg.SubtituloSistema.Trim();
-        cfg.Tema = cfg.Tema is "claro" or "escuro" or "automatico" ? cfg.Tema : "automatico";
+        cfg.Tema = cfg.Tema is "claro" or "escuro" ? cfg.Tema : "claro";
         await ConfigSvc.SalvarAsync(cfg);
         await JS.InvokeVoidAsync("themeManager.setPreference", cfg.Tema);
         await JS.InvokeVoidAsync("location.reload");
@@ -208,7 +204,7 @@
         cfg.NomeSistema = "Gestão de Acordos";
         cfg.LogoDataUrl = null;
         cfg.SubtituloSistema = "Advocacia especializada";
-        cfg.Tema = "automatico";
+        cfg.Tema = "claro";
         cfg.CorPrimaria = "#0d6efd";
         cfg.CorMenu = "#1b2a4a";
         erroLogo = null;

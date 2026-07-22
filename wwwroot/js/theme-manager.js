@@ -1,106 +1,94 @@
 (function () {
     const storageKey = 'gestao-acordos-theme-mode';
-    const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    let configuredMode = 'automatico';
-    let listening = false;
+    const allowedThemes = new Set(['claro', 'escuro']);
+    let listenersRegistered = false;
 
-    function normalize(mode) {
-        return mode === 'claro' || mode === 'escuro' || mode === 'automatico'
-            ? mode
-            : 'automatico';
+    function normalize(theme) {
+        return allowedThemes.has(theme) ? theme : 'claro';
     }
 
-    function readSavedMode() {
-        try { return normalize(localStorage.getItem(storageKey) || configuredMode); }
-        catch { return normalize(configuredMode); }
+    function readStoredTheme() {
+        try {
+            const stored = localStorage.getItem(storageKey);
+            return allowedThemes.has(stored) ? stored : null;
+        } catch {
+            return null;
+        }
     }
 
-    function resolvedTheme(mode) {
-        return mode === 'automatico'
-            ? (darkQuery.matches ? 'escuro' : 'claro')
-            : mode;
+    function saveTheme(theme) {
+        try { localStorage.setItem(storageKey, theme); } catch { }
     }
 
-    function updateBrowserChrome(theme) {
-        const dark = theme === 'escuro';
-        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
+    function applyTheme(theme) {
+        const normalized = normalize(theme);
+        const dark = normalized === 'escuro';
+        const root = document.documentElement;
+
+        root.setAttribute('data-theme', normalized);
+        root.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
+        root.style.colorScheme = dark ? 'dark' : 'light';
+
+        if (document.body) {
+            document.body.setAttribute('data-theme', normalized);
+            document.body.classList.toggle('theme-dark', dark);
+            document.body.classList.toggle('theme-light', !dark);
+        }
 
         const meta = document.querySelector('meta[name="theme-color"]');
         if (meta) meta.setAttribute('content', dark ? '#0d111b' : '#f6f7fb');
+
+        return normalized;
     }
 
-    function apply(mode, persist) {
-        configuredMode = normalize(mode);
-        const theme = resolvedTheme(configuredMode);
-        const root = document.documentElement;
-
-        if (root.getAttribute('data-theme') !== theme)
-            root.setAttribute('data-theme', theme);
-
-        if (root.getAttribute('data-theme-mode') !== configuredMode)
-            root.setAttribute('data-theme-mode', configuredMode);
-
-        updateBrowserChrome(theme);
-
-        if (persist !== false) {
-            try { localStorage.setItem(storageKey, configuredMode); } catch { }
-        }
-
-        return theme;
+    function refresh() {
+        return applyTheme(readStoredTheme() || 'claro');
     }
 
-    function refreshFromPreference() {
-        return apply(readSavedMode(), false);
-    }
+    function registerListeners() {
+        if (listenersRegistered) return;
 
-    function onSystemThemeChanged() {
-        configuredMode = readSavedMode();
-        if (configuredMode === 'automatico') apply('automatico', false);
-    }
-
-    function ensureListener() {
-        if (listening) return;
-
-        if (darkQuery.addEventListener) darkQuery.addEventListener('change', onSystemThemeChanged);
-        else if (darkQuery.addListener) darkQuery.addListener(onSystemThemeChanged);
-
-        // O Blazor pode atualizar partes do documento durante a navegação aprimorada.
-        // Reaplicamos o tema após cada troca de rota para impedir o retorno ao modo claro.
-        document.addEventListener('enhancedload', refreshFromPreference);
-        window.addEventListener('pageshow', refreshFromPreference);
-        window.addEventListener('popstate', refreshFromPreference);
-        window.addEventListener('focus', refreshFromPreference);
+        // A preferência salva no dispositivo é sempre reaplicada depois de qualquer navegação.
+        document.addEventListener('enhancedload', refresh);
+        window.addEventListener('pageshow', refresh);
+        window.addEventListener('popstate', refresh);
+        window.addEventListener('focus', refresh);
         document.addEventListener('visibilitychange', function () {
-            if (!document.hidden) refreshFromPreference();
+            if (!document.hidden) refresh();
         });
         window.addEventListener('storage', function (event) {
-            if (event.key === storageKey) refreshFromPreference();
+            if (event.key === storageKey) refresh();
         });
 
-        // A navegação aprimorada é tratada pelo evento enhancedload.
-        // Não usamos MutationObserver aqui para evitar ciclos de reaplicação do tema.
-
-
-        listening = true;
+        listenersRegistered = true;
     }
 
     window.themeManager = {
-        initialize: function (mode) {
-            ensureListener();
-            return apply(mode, true);
+        // Usado pelos layouts. Não sobrescreve a preferência já salva no celular.
+        initialize: function (serverTheme) {
+            registerListeners();
+            const stored = readStoredTheme();
+            const selected = stored || normalize(serverTheme);
+            if (!stored) saveTheme(selected);
+            return applyTheme(selected);
         },
-        setPreference: function (mode) {
-            ensureListener();
-            return apply(mode, true);
+
+        // Usado somente quando o usuário salva explicitamente a opção de tema.
+        setPreference: function (theme) {
+            registerListeners();
+            const selected = normalize(theme);
+            saveTheme(selected);
+            return applyTheme(selected);
         },
+
         refresh: function () {
-            ensureListener();
-            return refreshFromPreference();
+            registerListeners();
+            return refresh();
         },
+
         initializeEarly: function () {
-            ensureListener();
-            return refreshFromPreference();
+            registerListeners();
+            return refresh();
         }
     };
 })();

@@ -13,6 +13,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ClienteEmpresa> ClienteEmpresas => Set<ClienteEmpresa>();
     public DbSet<Acordo> Acordos => Set<Acordo>();
     public DbSet<AcordoPdf> AcordosPdf => Set<AcordoPdf>();
+    public DbSet<AcordoAnexo> AcordoAnexos => Set<AcordoAnexo>();
     public DbSet<Parcela> Parcelas => Set<Parcela>();
     public DbSet<ParcelaComprovante> ParcelaComprovantes => Set<ParcelaComprovante>();
     public DbSet<Evento> Eventos => Set<Evento>();
@@ -75,6 +76,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .WithOne(x => x.Pdf)
                 .HasForeignKey<AcordoPdf>(x => x.AcordoId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+
+        builder.Entity<AcordoAnexo>(e =>
+        {
+            e.Property(x => x.NomeArquivo).IsRequired().HasMaxLength(255);
+            e.Property(x => x.ContentType).IsRequired().HasMaxLength(100);
+            e.HasOne(x => x.Acordo)
+                .WithMany(x => x.Anexos)
+                .HasForeignKey(x => x.AcordoId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.AcordoId);
         });
 
         builder.Entity<Parcela>(e =>
