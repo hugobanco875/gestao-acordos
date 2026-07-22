@@ -29,9 +29,22 @@
     <script src="js/download.js?v=20260722-preview-download"></script>
     <script src="js/input-masks.js"></script>
     <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('service-worker.js');
-        }
+        // Evita que versões antigas da interface permaneçam presas no navegador/PWA.
+        // O sistema é Blazor Server e não depende de cache offline.
+        (async () => {
+            try {
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(registrations.map(registration => registration.unregister()));
+                }
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+                }
+            } catch (error) {
+                console.warn('Não foi possível limpar o cache antigo da aplicação.', error);
+            }
+        })();
     </script>
 </body>
 

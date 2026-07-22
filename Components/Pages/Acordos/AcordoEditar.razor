@@ -113,9 +113,9 @@ else
             }
 
             <div class="col-12">
-                <label class="form-label">Arquivos do acordo</label>
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-1"><label class="form-label mb-0">Arquivos do acordo</label><span class="badge text-bg-success">UPLOAD V3</span></div>
                 <InputFile @key="inputFileKey" class="form-control" OnChange="OnArquivosSelected" accept=".pdf,.docx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple disabled="@processandoArquivos" />
-                <div class="form-text">Formatos permitidos: PDF, DOCX, JPG, JPEG e PNG. A importação começa automaticamente após a seleção. Aguarde todos chegarem a 100% antes de salvar. Limite de 10 MB por arquivo.</div>
+                <div class="form-text"><strong>Upload novo V3:</strong> selecione os arquivos e aguarde cada item chegar a 100%. O botão Salvar acordo permanece bloqueado durante o envio. Formatos: PDF, DOCX, JPG, JPEG e PNG. Limite de 10 MB por arquivo.</div>
 
                 @if (uploadsEmAndamento.Count > 0)
                 {

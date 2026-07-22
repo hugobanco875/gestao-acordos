@@ -140,6 +140,21 @@ else
 
 app.UseHttpsRedirection();
 
+app.Use(async (context, next) =>
+{
+    // Impede que páginas/componentes antigos permaneçam no cache após uma atualização.
+    context.Response.OnStarting(() =>
+    {
+        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+        context.Response.Headers.Pragma = "no-cache";
+        context.Response.Headers.Expires = "0";
+        return Task.CompletedTask;
+    });
+    await next();
+});
+
+
+
 
 app.UseAntiforgery();
 
