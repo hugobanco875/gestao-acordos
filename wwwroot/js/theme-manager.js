@@ -3,7 +3,6 @@
     const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
     let configuredMode = 'automatico';
     let listening = false;
-    let applying = false;
 
     function normalize(mode) {
         return mode === 'claro' || mode === 'escuro' || mode === 'automatico'
@@ -32,24 +31,23 @@
     }
 
     function apply(mode, persist) {
-        applying = true;
-        try {
-            configuredMode = normalize(mode);
-            const theme = resolvedTheme(configuredMode);
-            const root = document.documentElement;
+        configuredMode = normalize(mode);
+        const theme = resolvedTheme(configuredMode);
+        const root = document.documentElement;
 
+        if (root.getAttribute('data-theme') !== theme)
             root.setAttribute('data-theme', theme);
+
+        if (root.getAttribute('data-theme-mode') !== configuredMode)
             root.setAttribute('data-theme-mode', configuredMode);
-            updateBrowserChrome(theme);
 
-            if (persist !== false) {
-                try { localStorage.setItem(storageKey, configuredMode); } catch { }
-            }
+        updateBrowserChrome(theme);
 
-            return theme;
-        } finally {
-            applying = false;
+        if (persist !== false) {
+            try { localStorage.setItem(storageKey, configuredMode); } catch { }
         }
+
+        return theme;
     }
 
     function refreshFromPreference() {
@@ -80,21 +78,9 @@
             if (event.key === storageKey) refreshFromPreference();
         });
 
-        // Protege os atributos do <html> caso algum carregamento de rota os remova.
-        const observer = new MutationObserver(function (mutations) {
-            if (applying) return;
-            const lostTheme = mutations.some(function (mutation) {
-                return mutation.type === 'attributes' &&
-                    (mutation.attributeName === 'data-theme' ||
-                     mutation.attributeName === 'data-theme-mode' ||
-                     mutation.attributeName === 'data-bs-theme');
-            });
-            if (lostTheme) queueMicrotask(refreshFromPreference);
-        });
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ['data-theme', 'data-theme-mode', 'data-bs-theme']
-        });
+        // A navegação aprimorada é tratada pelo evento enhancedload.
+        // Não usamos MutationObserver aqui para evitar ciclos de reaplicação do tema.
+
 
         listening = true;
     }
