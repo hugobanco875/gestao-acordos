@@ -280,3 +280,44 @@ html[data-theme="escuro"] .logo-upload-box { background:var(--surface-soft)!impo
 html[data-theme="escuro"] .logo-preview-large { background:var(--surface)!important; border-color:var(--border)!important; color:var(--text-muted)!important; }
 html[data-theme="escuro"] .permission-card { background:var(--surface-soft); border-color:var(--border); }
 html[data-theme="escuro"] .permission-card-active { background:color-mix(in srgb,var(--primary) 10%,var(--surface)); border-color:var(--primary); }
+
+
+/* Tema consistente nas páginas de conta e formulários de senha */
+.account-content-card .form-floating > .form-control,
+.account-content-card .form-floating > .form-control:focus {
+    color: var(--text);
+    background-color: var(--surface);
+    border-color: var(--border-strong);
+}
+
+.account-content-card .form-floating > label {
+    color: var(--text-muted);
+}
+
+html[data-theme="escuro"] .account-content-card,
+html[data-theme="escuro"] .account-nav-card {
+    color: var(--text);
+    background: var(--surface);
+    border-color: var(--border);
+}
+
+html[data-theme="escuro"] .account-content-card .form-floating > .form-control,
+html[data-theme="escuro"] .account-content-card .form-floating > .form-control:focus {
+    color: var(--text) !important;
+    background-color: var(--surface-soft) !important;
+    border-color: var(--border-strong) !important;
+}
+
+html[data-theme="escuro"] .account-content-card .form-floating > label,
+html[data-theme="escuro"] .account-content-card .form-label {
+    color: var(--text-muted) !important;
+}
+
+html[data-theme="escuro"] .account-content-card .form-floating > .form-control:focus ~ label,
+html[data-theme="escuro"] .account-content-card .form-floating > .form-control:not(:placeholder-shown) ~ label {
+    color: var(--text-muted) !important;
+}
+
+html[data-theme="escuro"] .account-content-card .form-floating > label::after {
+    background-color: transparent !important;
+}

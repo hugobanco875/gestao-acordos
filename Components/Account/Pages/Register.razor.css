@@ -92,41 +92,6 @@
     display: none;
 }
 
-.permission-card {
-    margin-top: 1.25rem;
-    padding: 1rem 1.1rem;
-    border: 1px solid var(--bs-border-color);
-    border-radius: 14px;
-    background: var(--bs-tertiary-bg);
-}
-
-.permission-card .form-check {
-    display: flex;
-    align-items: flex-start;
-    gap: .8rem;
-    padding-left: 0;
-}
-
-.permission-card .form-check-input {
-    flex: 0 0 auto;
-    width: 2.5rem;
-    height: 1.35rem;
-    margin: .12rem 0 0;
-}
-
-.permission-card .form-check-label {
-    display: flex;
-    flex-direction: column;
-    gap: .2rem;
-    cursor: pointer;
-}
-
-.permission-card .form-check-label span {
-    color: var(--bs-secondary-color);
-    font-size: .88rem;
-    line-height: 1.4;
-}
-
 .user-create-actions {
     display: flex;
     justify-content: flex-end;
@@ -206,36 +171,103 @@
     }
 }
 
-/* Seletor administrativo acessível e amigável para toque */
+
+/* Permissão administrativa: um único switch, sem áreas de clique sobrepostas */
 .permission-card {
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:1rem;
-    cursor:pointer;
-    transition:border-color .18s ease, background .18s ease, box-shadow .18s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1.25rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 14px;
+    background: var(--bs-tertiary-bg);
+    transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
 }
-.permission-card:hover { border-color:color-mix(in srgb,var(--bs-primary) 48%,var(--bs-border-color)); }
+
 .permission-card-active {
-    border-color:color-mix(in srgb,var(--bs-primary) 55%,var(--bs-border-color));
-    background:color-mix(in srgb,var(--bs-primary) 8%,var(--bs-body-bg));
-    box-shadow:0 0 0 3px color-mix(in srgb,var(--bs-primary) 9%,transparent);
+    border-color: color-mix(in srgb, var(--bs-primary) 58%, var(--bs-border-color));
+    background: color-mix(in srgb, var(--bs-primary) 8%, var(--bs-body-bg));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bs-primary) 9%, transparent);
 }
-.permission-copy { display:flex; align-items:center; gap:.85rem; min-width:0; }
-.permission-copy > span:last-child { display:flex; flex-direction:column; gap:.18rem; }
-.permission-copy small { color:var(--bs-secondary-color); font-size:.86rem; line-height:1.4; }
-.permission-icon { width:42px; height:42px; flex:0 0 42px; display:grid; place-items:center; border-radius:12px; color:var(--bs-primary); background:color-mix(in srgb,var(--bs-primary) 12%,transparent); }
-.admin-switch { display:flex; align-items:center; gap:.55rem; flex:0 0 auto; }
-.admin-switch-input { position:absolute; opacity:0; pointer-events:none; }
-.admin-switch-track { width:3rem; height:1.65rem; padding:.18rem; display:flex; align-items:center; border-radius:999px; background:var(--bs-secondary-bg); border:1px solid var(--bs-border-color); transition:.18s ease; }
-.admin-switch-thumb { width:1.15rem; height:1.15rem; border-radius:50%; background:var(--bs-body-bg); box-shadow:0 2px 6px rgba(0,0,0,.2); transition:transform .18s ease; }
-.admin-switch-input:checked + .admin-switch-track { background:var(--bs-primary); border-color:var(--bs-primary); }
-.admin-switch-input:checked + .admin-switch-track .admin-switch-thumb { transform:translateX(1.3rem); }
-.admin-switch-input:focus-visible + .admin-switch-track { box-shadow:0 0 0 4px color-mix(in srgb,var(--bs-primary) 20%,transparent); }
-.admin-switch-status { min-width:5.2rem; color:var(--bs-secondary-color); font-size:.76rem; font-weight:700; text-align:right; }
-.permission-card-active .admin-switch-status { color:var(--bs-primary); }
-@media (max-width:575.98px) {
-    .permission-card { align-items:stretch; flex-direction:column; }
-    .admin-switch { width:100%; justify-content:space-between; padding-top:.75rem; border-top:1px solid var(--bs-border-color); }
-    .admin-switch-status { order:-1; text-align:left; }
+
+.permission-copy {
+    display: flex;
+    align-items: center;
+    gap: .85rem;
+    min-width: 0;
+}
+
+.permission-copy > div {
+    display: flex;
+    flex-direction: column;
+    gap: .18rem;
+}
+
+.permission-title {
+    margin: 0;
+    color: var(--bs-body-color);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.permission-copy small {
+    color: var(--bs-secondary-color);
+    font-size: .86rem;
+    line-height: 1.4;
+}
+
+.permission-icon {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: var(--bs-primary);
+    background: color-mix(in srgb, var(--bs-primary) 12%, transparent);
+}
+
+.admin-permission-switch {
+    min-width: 5.4rem;
+    margin: 0;
+    padding-left: 3.25rem;
+    flex: 0 0 auto;
+}
+
+.admin-permission-switch .form-check-input {
+    width: 2.75rem;
+    height: 1.45rem;
+    margin-left: -3.25rem;
+    cursor: pointer;
+}
+
+.admin-permission-switch .form-check-label {
+    min-width: 2rem;
+    color: var(--bs-secondary-color);
+    font-size: .84rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.permission-card-active .admin-permission-switch .form-check-label {
+    color: var(--bs-primary);
+}
+
+@media (max-width: 575.98px) {
+    .permission-card {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .admin-permission-switch {
+        width: 100%;
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-top: .75rem;
+        border-top: 1px solid var(--bs-border-color);
+    }
 }

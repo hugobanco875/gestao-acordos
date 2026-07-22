@@ -1,4 +1,5 @@
 @page "/Account/Register"
+@layout GestaoAcordos.Components.Layout.MainLayout
 
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
@@ -73,20 +74,22 @@
 
                 @if (!_primeiroUsuario)
                 {
-                    <label class="permission-card @(Input.Administrador ? "permission-card-active" : string.Empty)" for="Input.Administrador">
-                        <span class="permission-copy">
-                            <span class="permission-icon"><i class="bi bi-shield-lock-fill"></i></span>
-                            <span>
-                                <strong>Usuário administrador</strong>
+                    <div class="permission-card @(Input.Administrador ? "permission-card-active" : string.Empty)">
+                        <div class="permission-copy">
+                            <span class="permission-icon" aria-hidden="true"><i class="bi bi-shield-lock-fill"></i></span>
+                            <div>
+                                <label class="permission-title" for="Input.Administrador">Usuário administrador</label>
                                 <small>Permite gerenciar usuários, configurações, gerar backups e restaurar dados.</small>
-                            </span>
-                        </span>
-                        <span class="admin-switch">
-                            <InputCheckbox @bind-Value="Input.Administrador" id="Input.Administrador" class="admin-switch-input" />
-                            <span class="admin-switch-track" aria-hidden="true"><span class="admin-switch-thumb"></span></span>
-                            <span class="admin-switch-status">@(Input.Administrador ? "Ativado" : "Desativado")</span>
-                        </span>
-                    </label>
+                            </div>
+                        </div>
+
+                        <div class="form-check form-switch admin-permission-switch">
+                            <InputCheckbox @bind-Value="Input.Administrador" id="Input.Administrador" class="form-check-input" role="switch" />
+                            <label class="form-check-label" for="Input.Administrador">
+                                @(Input.Administrador ? "Sim" : "Não")
+                            </label>
+                        </div>
+                    </div>
                 }
 
                 <div class="user-create-actions">
