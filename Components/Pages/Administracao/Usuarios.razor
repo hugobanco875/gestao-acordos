@@ -257,7 +257,7 @@ else
             usuario.Administrador = !usuario.Administrador;
             usuario.SolicitouAdministrador = false;
             usuario.AdministradorAutorizadorId = usuario.Administrador ? _usuarioAtualId : null;
-            usuario.AdministradorAutorizadoEm = usuario.Administrador ? DateTime.Now : null;
+            usuario.AdministradorAutorizadoEm = usuario.Administrador ? GestaoAcordos.Services.RelogioSistema.Agora : null;
             usuario.SecurityStamp = Guid.NewGuid().ToString();
 
 
@@ -282,7 +282,7 @@ else
             usuario.Administrador = true;
             usuario.SolicitouAdministrador = false;
             usuario.AdministradorAutorizadorId = _usuarioAtualId;
-            usuario.AdministradorAutorizadoEm = DateTime.Now;
+            usuario.AdministradorAutorizadoEm = GestaoAcordos.Services.RelogioSistema.Agora;
             usuario.SecurityStamp = Guid.NewGuid().ToString();
 
 

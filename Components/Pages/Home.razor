@@ -153,7 +153,7 @@ else
 @code {
     private bool carregando = true;
 
-    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly hoje = GestaoAcordos.Services.RelogioSistema.Hoje;
     private DateOnly inicioSemana, fimSemana, inicioMes, fimMes;
 
     private List<Parcela> abertas = new();
@@ -165,7 +165,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        int diff = (7 + (int)DateTime.Today.DayOfWeek - (int)DayOfWeek.Monday) % 7;
+        int diff = (7 + (int)GestaoAcordos.Services.RelogioSistema.Agora.DayOfWeek - (int)DayOfWeek.Monday) % 7;
         inicioSemana = hoje.AddDays(-diff);
         fimSemana = inicioSemana.AddDays(6);
         inicioMes = new DateOnly(hoje.Year, hoje.Month, 1);
@@ -191,7 +191,7 @@ else
             .ToListAsync();
 
         proximosEventos = eventos
-            .Where(e => e.DataHora >= DateTime.Today)
+            .Where(e => e.DataHora >= GestaoAcordos.Services.RelogioSistema.Agora.Date)
             .OrderBy(e => e.DataHora)
             .Take(8)
             .ToList();

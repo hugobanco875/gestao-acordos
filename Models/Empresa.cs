@@ -58,7 +58,7 @@ public class Empresa
 
     public bool Ativo { get; set; } = true;
 
-    public DateTime CriadoEm { get; set; } = DateTime.Now;
+    public DateTime CriadoEm { get; set; } = GestaoAcordos.Services.RelogioSistema.Agora;
 
     public List<Cliente> Clientes { get; set; } = new();
     public List<ClienteEmpresa> ClienteEmpresas { get; set; } = new();

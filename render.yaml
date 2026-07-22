@@ -8,5 +8,7 @@ services:
     region: virginia          # região gratuita mais próxima do Brasil
     healthCheckPath: /Account/Login
     envVars:
+      - key: TZ
+        value: America/Maceio
       - key: ConnectionStrings__DefaultConnection
         sync: false           # você define o valor (secreto) no painel do Render

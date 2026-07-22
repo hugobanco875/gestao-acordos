@@ -137,7 +137,7 @@ else
 @code {
     [Parameter] public int Id { get; set; }
     private Acordo? acordo;
-    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly hoje = GestaoAcordos.Services.RelogioSistema.Hoje;
     private decimal TotalEntradas => acordo?.Parcelas.Where(p => p.Tipo == TipoMovimentoFinanceiro.Entrada && p.Paga).Sum(p => p.ValorPago ?? p.Valor) ?? 0;
     private decimal Recebido => acordo?.Parcelas.Where(p => p.Paga).Sum(p => p.ValorPago ?? p.Valor) ?? 0;
     private decimal EmAberto => Math.Max(0, (acordo?.ValorTotal ?? 0) - Recebido);
@@ -156,7 +156,7 @@ else
 
     private bool novaEntradaAberta, salvandoEntrada;
     private decimal novaEntradaValor;
-    private DateOnly novaEntradaData = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly novaEntradaData = GestaoAcordos.Services.RelogioSistema.Hoje;
     private FormaPagamento novaEntradaForma = FormaPagamento.Pix;
     private string? novaEntradaObservacao, erroEntrada, comprovanteNome, comprovanteTipo;
     private byte[]? comprovanteBytes;
@@ -165,7 +165,7 @@ else
     private async Task OnComprovanteSelecionado(InputFileChangeEventArgs e){const long max=10*1024*1024;var f=e.File;if(f.Size>max){erroEntrada="O comprovante deve ter no máximo 10 MB.";return;}using var ms=new MemoryStream();await f.OpenReadStream(max).CopyToAsync(ms);comprovanteBytes=ms.ToArray();comprovanteNome=f.Name;comprovanteTipo=f.ContentType;}
     private async Task SalvarNovaEntrada(){erroEntrada=null;if(acordo is null||novaEntradaValor<=0){erroEntrada="Informe um valor de entrada maior que zero.";return;}if(Recebido+novaEntradaValor>acordo.ValorTotal){erroEntrada="A entrada ultrapassa o saldo em aberto do acordo.";return;}salvandoEntrada=true;using var db=await DbFactory.CreateDbContextAsync();var p=new Parcela{AcordoId=Id,Tipo=TipoMovimentoFinanceiro.Entrada,Numero=0,Valor=novaEntradaValor,DataVencimento=novaEntradaData,Paga=true,DataPagamento=novaEntradaData,ValorPago=novaEntradaValor,FormaPagamento=novaEntradaForma,Observacao=novaEntradaObservacao,ComprovanteNomeArquivo=comprovanteNome,ComprovanteContentType=comprovanteTipo};db.Parcelas.Add(p);await db.SaveChangesAsync();if(comprovanteBytes is not null){db.ParcelaComprovantes.Add(new ParcelaComprovante{ParcelaId=p.Id,Conteudo=comprovanteBytes});await db.SaveChangesAsync();}salvandoEntrada=false;novaEntradaAberta=false;await Carregar();}
 
-    private Parcela? parcelaConfirmacao; private bool confirmandoEstorno; private DateOnly dataConfirmacao=DateOnly.FromDateTime(DateTime.Today); private FormaPagamento formaConfirmacao=FormaPagamento.Pix;
+    private Parcela? parcelaConfirmacao; private bool confirmandoEstorno; private DateOnly dataConfirmacao=GestaoAcordos.Services.RelogioSistema.Hoje; private FormaPagamento formaConfirmacao=FormaPagamento.Pix;
     private void SolicitarConfirmacao(Parcela p,bool estorno){parcelaConfirmacao=p;confirmandoEstorno=estorno;dataConfirmacao=hoje;formaConfirmacao=p.FormaPagamento==FormaPagamento.NaoInformada?FormaPagamento.Pix:p.FormaPagamento;}
     private void CancelarConfirmacao(){parcelaConfirmacao=null;confirmandoEstorno=false;}
     private async Task ConfirmarAcao(){if(parcelaConfirmacao is null)return;using var db=await DbFactory.CreateDbContextAsync();var p=await db.Parcelas.FirstOrDefaultAsync(x=>x.Id==parcelaConfirmacao.Id);if(p is null){CancelarConfirmacao();return;}if(confirmandoEstorno){p.Paga=false;p.DataPagamento=null;p.ValorPago=null;}else{p.Paga=true;p.DataPagamento=dataConfirmacao;p.ValorPago=p.Valor;p.FormaPagamento=formaConfirmacao;}await db.SaveChangesAsync();CancelarConfirmacao();await Carregar();}

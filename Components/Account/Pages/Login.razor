@@ -107,7 +107,7 @@
             {
                 await using var db = await DbFactory.CreateDbContextAsync();
                 var atual = await db.Users.FindAsync(usuario.Id);
-                if (atual is not null) atual.UltimoAcessoEm = DateTime.Now;
+                if (atual is not null) atual.UltimoAcessoEm = GestaoAcordos.Services.RelogioSistema.Agora;
                 await db.SaveChangesAsync();
             }
             RedirectManager.RedirectTo(ReturnUrl);

@@ -105,7 +105,7 @@ else
         {
             var authenticationState = await AuthStateProvider.GetAuthenticationStateAsync();
             var bytes = await BackupSvc.ExportarAsync(authenticationState.User);
-            var nome = $"backup_gestao-acordos_{DateTime.Now:yyyy-MM-dd_HHmm}.json";
+            var nome = $"backup_gestao-acordos_{GestaoAcordos.Services.RelogioSistema.Agora:yyyy-MM-dd_HHmm}.json";
             await JS.InvokeVoidAsync("appDownload.fromBytes", nome, "application/json", Convert.ToBase64String(bytes));
             msgBaixar = $"Backup gerado e baixado: {nome} ({bytes.Length / 1024} KB).";
         }

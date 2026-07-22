@@ -42,7 +42,7 @@ else
             <tbody>
                 @foreach (var ev in Filtrados)
                 {
-                    <tr class="@(ev.Concluido ? "text-muted" : (ev.DataHora < DateTime.Now ? "table-warning" : ""))">
+                    <tr class="@(ev.Concluido ? "text-muted" : (ev.DataHora < GestaoAcordos.Services.RelogioSistema.Agora ? "table-warning" : ""))">
                         <td class="text-nowrap">@ev.DataHora.ToString("dd/MM/yyyy HH:mm")</td>
                         <td><span class="badge @TipoCor(ev.Tipo)">@TipoNome(ev.Tipo)</span></td>
                         <td>
@@ -163,7 +163,7 @@ else
 
     private List<Evento> Filtrados => (eventos ?? new()).Where(ev => filtro switch
     {
-        "proximos" => !ev.Concluido && ev.DataHora >= DateTime.Today,
+        "proximos" => !ev.Concluido && ev.DataHora >= GestaoAcordos.Services.RelogioSistema.Agora.Date,
         "concluidos" => ev.Concluido,
         _ => true
     }).OrderBy(ev => ev.DataHora).ToList();
@@ -196,7 +196,7 @@ else
 
     private void Novo()
     {
-        modelo = new Evento { DataHora = DateTime.Now };
+        modelo = new Evento { DataHora = GestaoAcordos.Services.RelogioSistema.Agora };
         editando = true;
     }
 

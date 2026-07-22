@@ -27,7 +27,7 @@ public class Evento
     public string Titulo { get; set; } = string.Empty;
 
     [Display(Name = "Data e hora")]
-    public DateTime DataHora { get; set; } = DateTime.Now;
+    public DateTime DataHora { get; set; } = GestaoAcordos.Services.RelogioSistema.Agora;
 
     [Display(Name = "Empresa")]
     public int? EmpresaId { get; set; }
@@ -48,5 +48,5 @@ public class Evento
     [Display(Name = "Concluído")]
     public bool Concluido { get; set; }
 
-    public DateTime CriadoEm { get; set; } = DateTime.Now;
+    public DateTime CriadoEm { get; set; } = GestaoAcordos.Services.RelogioSistema.Agora;
 }

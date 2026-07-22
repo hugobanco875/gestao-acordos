@@ -377,7 +377,7 @@ else
                 return;
             }
             if (modelo.ValorEntrada > 0 && modelo.DataEntrada is null)
-                modelo.DataEntrada = DateOnly.FromDateTime(DateTime.Today);
+                modelo.DataEntrada = GestaoAcordos.Services.RelogioSistema.Hoje;
             if (modelo.ValorEntrada == 0)
                 modelo.DataEntrada = null;
             if (!empresasDoCliente.Any(x => x.Id == modelo.EmpresaId))
@@ -403,7 +403,7 @@ else
         }
         else
         {
-            modelo.CriadoEm = DateTime.Now;
+            modelo.CriadoEm = GestaoAcordos.Services.RelogioSistema.Agora;
             modelo.Parcelas = ParcelaHelper.GerarParcelas(SaldoParcelar, modelo.QuantidadeParcelas, modelo.DataPrimeiraParcela);
             if (modelo.ValorEntrada > 0)
             {
@@ -412,9 +412,9 @@ else
                     Tipo = TipoMovimentoFinanceiro.Entrada,
                     Numero = 0,
                     Valor = modelo.ValorEntrada,
-                    DataVencimento = modelo.DataEntrada ?? DateOnly.FromDateTime(DateTime.Today),
+                    DataVencimento = modelo.DataEntrada ?? GestaoAcordos.Services.RelogioSistema.Hoje,
                     Paga = true,
-                    DataPagamento = modelo.DataEntrada ?? DateOnly.FromDateTime(DateTime.Today),
+                    DataPagamento = modelo.DataEntrada ?? GestaoAcordos.Services.RelogioSistema.Hoje,
                     ValorPago = modelo.ValorEntrada,
                     FormaPagamento = modelo.FormaPagamentoEntrada,
                     Observacao = modelo.ObservacaoEntrada
@@ -463,7 +463,7 @@ else
                 ContentType = arquivo.ContentType,
                 Conteudo = arquivo.Conteudo,
                 TamanhoBytes = arquivo.Conteudo.LongLength,
-                EnviadoEm = DateTime.Now
+                EnviadoEm = GestaoAcordos.Services.RelogioSistema.Agora
             });
         }
         return Task.CompletedTask;

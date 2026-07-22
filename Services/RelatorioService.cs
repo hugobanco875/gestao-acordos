@@ -24,7 +24,7 @@ public class RelatorioService
 
     public byte[] GerarExcel(IReadOnlyList<RelatorioParcelaItem> itens, DateOnly inicio, DateOnly fim, string filtro)
     {
-        var hoje = DateOnly.FromDateTime(DateTime.Today);
+        var hoje = GestaoAcordos.Services.RelogioSistema.Hoje;
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("Financeiro");
         ws.Cell(1, 1).Value = "Relatório Financeiro";
@@ -56,7 +56,7 @@ public class RelatorioService
 
     public byte[] GerarPdf(IReadOnlyList<RelatorioParcelaItem> itens, DateOnly inicio, DateOnly fim, string filtro)
     {
-        var hoje=DateOnly.FromDateTime(DateTime.Today);var recebido=itens.Where(i=>i.Paga).Sum(i=>i.ValorPago??i.Valor);var aberto=itens.Where(i=>!i.Paga).Sum(i=>i.Valor);
+        var hoje=GestaoAcordos.Services.RelogioSistema.Hoje;var recebido=itens.Where(i=>i.Paga).Sum(i=>i.ValorPago??i.Valor);var aberto=itens.Where(i=>!i.Paga).Sum(i=>i.Valor);
         return Document.Create(container=>container.Page(page=>
         {
             page.Size(PageSizes.A4.Landscape());page.Margin(22);page.DefaultTextStyle(t=>t.FontSize(8));

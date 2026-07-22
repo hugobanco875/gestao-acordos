@@ -60,7 +60,7 @@ public class Cliente
     [Display(Name = "Observações")]
     public string? Observacoes { get; set; }
 
-    public DateTime CriadoEm { get; set; } = DateTime.Now;
+    public DateTime CriadoEm { get; set; } = GestaoAcordos.Services.RelogioSistema.Agora;
 
     /// <summary>Empresa principal, mantida para compatibilidade e como seleção padrão.</summary>
     public List<ClienteEmpresa> ClienteEmpresas { get; set; } = new();

@@ -159,12 +159,12 @@
         user.Ativo = true;
         user.Administrador = primeiroUsuarioAgora || Input.Administrador;
         user.SolicitouAdministrador = false;
-        user.CriadoEm = DateTime.Now;
+        user.CriadoEm = GestaoAcordos.Services.RelogioSistema.Agora;
         user.AdministradorAutorizadorId = !primeiroUsuarioAgora && user.Administrador
             ? administradorCriador!.Id
             : null;
         user.AdministradorAutorizadoEm = !primeiroUsuarioAgora && user.Administrador
-            ? DateTime.Now
+            ? GestaoAcordos.Services.RelogioSistema.Agora
             : null;
 
         await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);

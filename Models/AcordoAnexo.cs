@@ -14,5 +14,5 @@ public class AcordoAnexo
     public string ContentType { get; set; } = "application/pdf";
     public byte[] Conteudo { get; set; } = Array.Empty<byte>();
     public long TamanhoBytes { get; set; }
-    public DateTime EnviadoEm { get; set; } = DateTime.Now;
+    public DateTime EnviadoEm { get; set; } = GestaoAcordos.Services.RelogioSistema.Agora;
 }

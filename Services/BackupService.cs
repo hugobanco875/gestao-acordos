@@ -46,7 +46,7 @@ public class BackupService(
         await using var db = await factory.CreateDbContextAsync();
         var data = new BackupData
         {
-            GeradoEm = DateTime.Now.ToString("s"),
+            GeradoEm = GestaoAcordos.Services.RelogioSistema.Agora.ToString("s"),
             Empresas = await db.Empresas.AsNoTracking().ToListAsync(),
             Clientes = await db.Clientes.AsNoTracking().ToListAsync(),
             ClienteEmpresas = await db.ClienteEmpresas.AsNoTracking().ToListAsync(),

@@ -51,13 +51,13 @@ public class Acordo
     public int QuantidadeParcelas { get; set; } = 1;
 
     [Display(Name = "Data da 1ª parcela")]
-    public DateOnly DataPrimeiraParcela { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+    public DateOnly DataPrimeiraParcela { get; set; } = GestaoAcordos.Services.RelogioSistema.Hoje;
 
     // Metadados do PDF do acordo (o conteúdo fica em AcordoPdf).
     public string? PdfNomeArquivo { get; set; }
     public string? PdfContentType { get; set; }
 
-    public DateTime CriadoEm { get; set; } = DateTime.Now;
+    public DateTime CriadoEm { get; set; } = GestaoAcordos.Services.RelogioSistema.Agora;
 
     public List<Parcela> Parcelas { get; set; } = new();
     public AcordoPdf? Pdf { get; set; }

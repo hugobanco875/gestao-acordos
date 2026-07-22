@@ -155,13 +155,13 @@
 
     private string situacao = "todas";
     private string tipo = "todos";
-    private DateOnly de = new(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateOnly ate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly de = new(GestaoAcordos.Services.RelogioSistema.Agora.Year, GestaoAcordos.Services.RelogioSistema.Agora.Month, 1);
+    private DateOnly ate = GestaoAcordos.Services.RelogioSistema.Hoje;
     private int empresaId;
     private int clienteId;
     private bool limitarAbertosAoPeriodo;
 
-    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly hoje = GestaoAcordos.Services.RelogioSistema.Hoje;
 
     protected override async Task OnInitializedAsync()
     {

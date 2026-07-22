@@ -23,6 +23,9 @@ var culturaPtBr = new CultureInfo("pt-BR");
 CultureInfo.DefaultThreadCurrentCulture = culturaPtBr;
 CultureInfo.DefaultThreadCurrentUICulture = culturaPtBr;
 
+// O horário funcional não depende do fuso do servidor.
+Console.WriteLine($"Fuso horário da aplicação: {RelogioSistema.IdFusoHorario} | Agora: {RelogioSistema.Agora:dd/MM/yyyy HH:mm:ss}");
+
 // Porta dinâmica em hospedagem gratuita (Render/Fly.io definem a variável PORT).
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrWhiteSpace(port))

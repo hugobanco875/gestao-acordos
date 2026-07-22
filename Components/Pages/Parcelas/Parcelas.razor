@@ -220,7 +220,7 @@ else
     private DateOnly? dataDe;
     private DateOnly? dataAte;
 
-    private readonly DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly hoje = GestaoAcordos.Services.RelogioSistema.Hoje;
     private Dictionary<int, DateOnly> datasBaixa = new();
 
     protected override async Task OnInitializedAsync()
