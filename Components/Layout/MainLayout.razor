@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @inject GestaoAcordos.Services.ConfiguracaoService ConfigSvc
+@inject IJSRuntime JS
 
 <HeadContent>
     <style>
@@ -14,16 +15,6 @@
         .bg-primary { background-color: var(--cor-primaria) !important; }
         .content a:not(.btn) { color: var(--cor-primaria); }
     </style>
-    <script>
-        (() => {
-            const configured = "@cfg.Tema";
-            const theme = configured === "automatico"
-                ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'escuro' : 'claro')
-                : configured;
-            document.documentElement.setAttribute('data-theme', theme);
-            document.documentElement.style.colorScheme = theme === 'escuro' ? 'dark' : 'light';
-        })();
-    </script>
 </HeadContent>
 
 <div class="page">
@@ -76,6 +67,16 @@
 
 @code {
     private Configuracao cfg = new();
-    protected override async Task OnInitializedAsync() { try { cfg = await ConfigSvc.ObterAsync(); } catch { cfg = new Configuracao(); } }
+    protected override async Task OnInitializedAsync()
+    {
+        try { cfg = await ConfigSvc.ObterAsync(); }
+        catch { cfg = new Configuracao(); }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("themeManager.initialize", cfg.Tema);
+    }
     private static string Inicial(string? nome) => string.IsNullOrWhiteSpace(nome) ? "U" : nome.Trim()[0].ToString().ToUpperInvariant();
 }

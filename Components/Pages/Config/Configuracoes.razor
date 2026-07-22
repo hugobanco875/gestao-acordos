@@ -199,6 +199,7 @@
         cfg.SubtituloSistema = string.IsNullOrWhiteSpace(cfg.SubtituloSistema) ? "Advocacia especializada" : cfg.SubtituloSistema.Trim();
         cfg.Tema = cfg.Tema is "claro" or "escuro" or "automatico" ? cfg.Tema : "automatico";
         await ConfigSvc.SalvarAsync(cfg);
+        await JS.InvokeVoidAsync("themeManager.setPreference", cfg.Tema);
         await JS.InvokeVoidAsync("location.reload");
     }
 
