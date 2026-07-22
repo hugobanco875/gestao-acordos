@@ -116,6 +116,14 @@ else
                 <label class="form-label">Arquivos do acordo</label>
                 <InputFile class="form-control" OnChange="OnArquivosSelected" accept=".pdf,.docx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple />
                 <div class="form-text">Formatos permitidos: PDF, DOCX, JPG, JPEG e PNG. Você pode selecionar vários arquivos de uma vez ou adicionar novos arquivos em seleções posteriores. Limite de 10 MB por arquivo.</div>
+                @if (processandoArquivos)
+                {
+                    <div class="alert alert-info py-2 mt-2 mb-0"><span class="spinner-border spinner-border-sm me-2"></span>Importando os arquivos. Aguarde para salvar o acordo...</div>
+                }
+                else if (!string.IsNullOrWhiteSpace(mensagemArquivos))
+                {
+                    <div class="alert alert-success py-2 mt-2 mb-0"><i class="bi bi-check-circle me-1"></i>@mensagemArquivos</div>
+                }
 
                 @if (arquivosExistentes.Count > 0 || arquivosSelecionados.Count > 0)
                 {
@@ -175,7 +183,7 @@ else
         }
 
         <div class="mt-3">
-            <button type="submit" class="btn btn-primary" disabled="@salvando"><i class="bi bi-check-lg"></i> Salvar acordo</button>
+            <button type="submit" class="btn btn-primary" disabled="@(salvando || processandoArquivos)"><i class="bi bi-check-lg"></i> @(salvando ? "Salvando..." : processandoArquivos ? "Importando arquivos..." : "Salvar acordo")</button>
             <a href="clientes/@cliente.Id" data-enhance-nav="false" class="btn btn-secondary">Cancelar</a>
         </div>
     </EditForm>
@@ -188,6 +196,8 @@ else
     private bool IsEdit => Id > 0;
     private bool carregando = true;
     private bool salvando;
+    private bool processandoArquivos;
+    private string? mensagemArquivos;
     private Cliente? cliente;
     private Acordo modelo = new();
     private List<Empresa> empresasDoCliente = new();
@@ -277,35 +287,56 @@ else
         const long maxPorArquivo = 10 * 1024 * 1024;
         const int maxArquivosPorSelecao = 20;
 
-        foreach (var file in e.GetMultipleFiles(maxArquivosPorSelecao))
+        processandoArquivos = true;
+        mensagemArquivos = null;
+        await InvokeAsync(StateHasChanged);
+
+        var adicionados = 0;
+        try
         {
-            var extensao = Path.GetExtension(file.Name);
-            if (string.IsNullOrWhiteSpace(extensao) || !TiposPermitidos.TryGetValue(extensao, out var contentTypeEsperado))
+            foreach (var file in e.GetMultipleFiles(maxArquivosPorSelecao))
             {
-                await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} não é permitido. Envie somente PDF, DOCX, JPG, JPEG ou PNG.");
-                continue;
+                var extensao = Path.GetExtension(file.Name);
+                if (string.IsNullOrWhiteSpace(extensao) || !TiposPermitidos.TryGetValue(extensao, out var contentTypeEsperado))
+                {
+                    await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} não é permitido. Envie somente PDF, DOCX, JPG, JPEG ou PNG.");
+                    continue;
+                }
+
+                if (file.Size <= 0)
+                {
+                    await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} está vazio e não foi anexado.");
+                    continue;
+                }
+
+                if (file.Size > maxPorArquivo)
+                {
+                    await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} ultrapassa o limite de 10 MB.");
+                    continue;
+                }
+
+                using var ms = new MemoryStream();
+                await file.OpenReadStream(maxAllowedSize: maxPorArquivo).CopyToAsync(ms);
+                arquivosSelecionados.Add(new ArquivoSelecionado
+                {
+                    Nome = Path.GetFileName(file.Name),
+                    ContentType = contentTypeEsperado,
+                    Conteudo = ms.ToArray()
+                });
+                adicionados++;
             }
 
-            if (file.Size <= 0)
+            mensagemArquivos = adicionados switch
             {
-                await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} está vazio e não foi anexado.");
-                continue;
-            }
-
-            if (file.Size > maxPorArquivo)
-            {
-                await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} ultrapassa o limite de 10 MB.");
-                continue;
-            }
-
-            using var ms = new MemoryStream();
-            await file.OpenReadStream(maxAllowedSize: maxPorArquivo).CopyToAsync(ms);
-            arquivosSelecionados.Add(new ArquivoSelecionado
-            {
-                Nome = Path.GetFileName(file.Name),
-                ContentType = contentTypeEsperado,
-                Conteudo = ms.ToArray()
-            });
+                0 => null,
+                1 => "Arquivo importado e pronto para ser salvo junto com o acordo.",
+                _ => $"{adicionados} arquivos importados e prontos para serem salvos junto com o acordo."
+            };
+        }
+        finally
+        {
+            processandoArquivos = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -387,46 +418,66 @@ else
             }
         }
 
+        if (processandoArquivos)
+            return;
+
         salvando = true;
-        using var db = await DbFactory.CreateDbContextAsync();
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await using var tx = await db.Database.BeginTransactionAsync();
 
-        if (IsEdit)
-        {
-            var acordo = await db.Acordos.FirstOrDefaultAsync(a => a.Id == Id);
-            if (acordo is null) { salvando = false; return; }
-            acordo.NumeroProcesso = modelo.NumeroProcesso;
-            acordo.Descricao = modelo.Descricao;
-            await RemoverAnexosMarcados(db, acordo);
-            await db.SaveChangesAsync();
-            await SalvarNovosAnexos(db, acordo.Id);
-            await db.SaveChangesAsync();
-        }
-        else
-        {
-            modelo.CriadoEm = GestaoAcordos.Services.RelogioSistema.Agora;
-            modelo.Parcelas = ParcelaHelper.GerarParcelas(SaldoParcelar, modelo.QuantidadeParcelas, modelo.DataPrimeiraParcela);
-            if (modelo.ValorEntrada > 0)
+            if (IsEdit)
             {
-                modelo.Parcelas.Add(new Parcela
-                {
-                    Tipo = TipoMovimentoFinanceiro.Entrada,
-                    Numero = 0,
-                    Valor = modelo.ValorEntrada,
-                    DataVencimento = modelo.DataEntrada ?? GestaoAcordos.Services.RelogioSistema.Hoje,
-                    Paga = true,
-                    DataPagamento = modelo.DataEntrada ?? GestaoAcordos.Services.RelogioSistema.Hoje,
-                    ValorPago = modelo.ValorEntrada,
-                    FormaPagamento = modelo.FormaPagamentoEntrada,
-                    Observacao = modelo.ObservacaoEntrada
-                });
-            }
-            db.Acordos.Add(modelo);
-            await db.SaveChangesAsync();
-            await SalvarNovosAnexos(db, modelo.Id);
-            await db.SaveChangesAsync();
-        }
+                var acordo = await db.Acordos.FirstOrDefaultAsync(a => a.Id == Id);
+                if (acordo is null) return;
 
-        Nav.NavigateTo($"clientes/{cliente!.Id}");
+                acordo.NumeroProcesso = modelo.NumeroProcesso;
+                acordo.Descricao = modelo.Descricao;
+                await RemoverAnexosMarcados(db, acordo);
+
+                foreach (var arquivo in arquivosSelecionados)
+                    db.AcordoAnexos.Add(CriarAnexo(acordo.Id, arquivo));
+
+                await db.SaveChangesAsync();
+            }
+            else
+            {
+                modelo.CriadoEm = GestaoAcordos.Services.RelogioSistema.Agora;
+                modelo.Parcelas = ParcelaHelper.GerarParcelas(SaldoParcelar, modelo.QuantidadeParcelas, modelo.DataPrimeiraParcela);
+                modelo.Anexos = arquivosSelecionados.Select(arquivo => CriarAnexo(0, arquivo)).ToList();
+
+                if (modelo.ValorEntrada > 0)
+                {
+                    modelo.Parcelas.Add(new Parcela
+                    {
+                        Tipo = TipoMovimentoFinanceiro.Entrada,
+                        Numero = 0,
+                        Valor = modelo.ValorEntrada,
+                        DataVencimento = modelo.DataEntrada ?? GestaoAcordos.Services.RelogioSistema.Hoje,
+                        Paga = true,
+                        DataPagamento = modelo.DataEntrada ?? GestaoAcordos.Services.RelogioSistema.Hoje,
+                        ValorPago = modelo.ValorEntrada,
+                        FormaPagamento = modelo.FormaPagamentoEntrada,
+                        Observacao = modelo.ObservacaoEntrada
+                    });
+                }
+
+                db.Acordos.Add(modelo);
+                await db.SaveChangesAsync();
+            }
+
+            await tx.CommitAsync();
+            Nav.NavigateTo($"clientes/{cliente!.Id}");
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Não foi possível salvar o acordo e seus anexos. Nenhuma alteração foi concluída. Detalhes: {ex.Message}");
+        }
+        finally
+        {
+            salvando = false;
+        }
     }
 
     private static string NomeForma(FormaPagamento forma) => FormasPagamento.Nome(forma);
@@ -452,20 +503,15 @@ else
         }
     }
 
-    private Task SalvarNovosAnexos(ApplicationDbContext db, int acordoId)
-    {
-        foreach (var arquivo in arquivosSelecionados)
+    private static AcordoAnexo CriarAnexo(int acordoId, ArquivoSelecionado arquivo)
+        => new()
         {
-            db.AcordoAnexos.Add(new AcordoAnexo
-            {
-                AcordoId = acordoId,
-                NomeArquivo = arquivo.Nome,
-                ContentType = arquivo.ContentType,
-                Conteudo = arquivo.Conteudo,
-                TamanhoBytes = arquivo.Conteudo.LongLength,
-                EnviadoEm = GestaoAcordos.Services.RelogioSistema.Agora
-            });
-        }
-        return Task.CompletedTask;
-    }
+            AcordoId = acordoId,
+            NomeArquivo = arquivo.Nome,
+            ContentType = arquivo.ContentType,
+            Conteudo = arquivo.Conteudo,
+            TamanhoBytes = arquivo.Conteudo.LongLength,
+            EnviadoEm = GestaoAcordos.Services.RelogioSistema.Agora
+        };
+
 }

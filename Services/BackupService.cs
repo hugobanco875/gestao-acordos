@@ -16,7 +16,9 @@ public class BackupData
     public List<ClienteEmpresa> ClienteEmpresas { get; set; } = new();
     public List<Acordo> Acordos { get; set; } = new();
     public List<AcordoPdf> AcordosPdf { get; set; } = new();
+    public List<AcordoAnexo> AcordoAnexos { get; set; } = new();
     public List<Parcela> Parcelas { get; set; } = new();
+    public List<ParcelaComprovante> ParcelaComprovantes { get; set; } = new();
     public List<Evento> Eventos { get; set; } = new();
 }
 
@@ -52,7 +54,9 @@ public class BackupService(
             ClienteEmpresas = await db.ClienteEmpresas.AsNoTracking().ToListAsync(),
             Acordos = await db.Acordos.AsNoTracking().ToListAsync(),
             AcordosPdf = await db.AcordosPdf.AsNoTracking().ToListAsync(),
+            AcordoAnexos = await db.AcordoAnexos.AsNoTracking().ToListAsync(),
             Parcelas = await db.Parcelas.AsNoTracking().ToListAsync(),
+            ParcelaComprovantes = await db.ParcelaComprovantes.AsNoTracking().ToListAsync(),
             Eventos = await db.Eventos.AsNoTracking().ToListAsync()
         };
         return JsonSerializer.SerializeToUtf8Bytes(data, _json);
@@ -73,7 +77,9 @@ public class BackupService(
 
         // Limpa os dados atuais (ordem segura de chaves estrangeiras).
         await db.Eventos.ExecuteDeleteAsync();
+        await db.ParcelaComprovantes.ExecuteDeleteAsync();
         await db.Parcelas.ExecuteDeleteAsync();
+        await db.AcordoAnexos.ExecuteDeleteAsync();
         await db.AcordosPdf.ExecuteDeleteAsync();
         await db.Acordos.ExecuteDeleteAsync();
         await db.ClienteEmpresas.ExecuteDeleteAsync();
@@ -129,6 +135,7 @@ public class BackupService(
             var oldClienteId = a.ClienteId;
             a.Id = 0;
             a.Parcelas = new();
+            a.Anexos = new();
             a.Pdf = null;
             a.Cliente = null;
             a.Empresa = null;
@@ -155,14 +162,39 @@ public class BackupService(
         }
         await db.SaveChangesAsync();
 
-        // Parcelas (remapeia AcordoId)
+        // Anexos dos acordos (conteúdo binário embutido em base64 no JSON).
+        foreach (var anexo in data.AcordoAnexos ?? new List<AcordoAnexo>())
+        {
+            if (!acoMap.TryGetValue(anexo.AcordoId, out var novoAco)) continue;
+            anexo.Id = 0;
+            anexo.AcordoId = novoAco;
+            anexo.Acordo = null;
+            db.AcordoAnexos.Add(anexo);
+        }
+        await db.SaveChangesAsync();
+
+        // Parcelas (remapeia AcordoId e mantém um mapa para os comprovantes).
+        var parcelaMap = new Dictionary<int, int>();
         foreach (var p in data.Parcelas)
         {
             if (!acoMap.TryGetValue(p.AcordoId, out var novoAco)) continue;
+            var oldParcelaId = p.Id;
             p.Id = 0;
             p.Acordo = null;
+            p.Comprovante = null;
             p.AcordoId = novoAco;
             db.Parcelas.Add(p);
+            await db.SaveChangesAsync();
+            parcelaMap[oldParcelaId] = p.Id;
+        }
+
+        // Comprovantes de parcelas. Backups antigos simplesmente terão esta lista vazia.
+        foreach (var comprovante in data.ParcelaComprovantes ?? new List<ParcelaComprovante>())
+        {
+            if (!parcelaMap.TryGetValue(comprovante.ParcelaId, out var novaParcela)) continue;
+            comprovante.ParcelaId = novaParcela;
+            comprovante.Parcela = null;
+            db.ParcelaComprovantes.Add(comprovante);
         }
         await db.SaveChangesAsync();
 
@@ -182,6 +214,7 @@ public class BackupService(
 
         return $"{data.Empresas.Count} empresa(s), {data.Clientes.Count} cliente(s), " +
                $"{data.Acordos.Count} acordo(s), {data.Parcelas.Count} parcela(s), " +
-               $"{data.Eventos.Count} evento(s) e {data.AcordosPdf.Count} PDF(s).";
+               $"{data.Eventos.Count} evento(s), {data.AcordosPdf.Count} PDF legado(s), " +
+               $"{data.AcordoAnexos?.Count ?? 0} anexo(s) e {data.ParcelaComprovantes?.Count ?? 0} comprovante(s).";
     }
 }
