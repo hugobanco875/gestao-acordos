@@ -3,11 +3,17 @@
     const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
     let configuredMode = 'automatico';
     let listening = false;
+    let applying = false;
 
     function normalize(mode) {
         return mode === 'claro' || mode === 'escuro' || mode === 'automatico'
             ? mode
             : 'automatico';
+    }
+
+    function readSavedMode() {
+        try { return normalize(localStorage.getItem(storageKey) || configuredMode); }
+        catch { return normalize(configuredMode); }
     }
 
     function resolvedTheme(mode) {
@@ -26,28 +32,70 @@
     }
 
     function apply(mode, persist) {
-        configuredMode = normalize(mode);
-        const theme = resolvedTheme(configuredMode);
+        applying = true;
+        try {
+            configuredMode = normalize(mode);
+            const theme = resolvedTheme(configuredMode);
+            const root = document.documentElement;
 
-        document.documentElement.setAttribute('data-theme', theme);
-        document.documentElement.setAttribute('data-theme-mode', configuredMode);
-        updateBrowserChrome(theme);
+            root.setAttribute('data-theme', theme);
+            root.setAttribute('data-theme-mode', configuredMode);
+            updateBrowserChrome(theme);
 
-        if (persist !== false) {
-            try { localStorage.setItem(storageKey, configuredMode); } catch { }
+            if (persist !== false) {
+                try { localStorage.setItem(storageKey, configuredMode); } catch { }
+            }
+
+            return theme;
+        } finally {
+            applying = false;
         }
+    }
 
-        return theme;
+    function refreshFromPreference() {
+        return apply(readSavedMode(), false);
     }
 
     function onSystemThemeChanged() {
+        configuredMode = readSavedMode();
         if (configuredMode === 'automatico') apply('automatico', false);
     }
 
     function ensureListener() {
         if (listening) return;
+
         if (darkQuery.addEventListener) darkQuery.addEventListener('change', onSystemThemeChanged);
         else if (darkQuery.addListener) darkQuery.addListener(onSystemThemeChanged);
+
+        // O Blazor pode atualizar partes do documento durante a navegação aprimorada.
+        // Reaplicamos o tema após cada troca de rota para impedir o retorno ao modo claro.
+        document.addEventListener('enhancedload', refreshFromPreference);
+        window.addEventListener('pageshow', refreshFromPreference);
+        window.addEventListener('popstate', refreshFromPreference);
+        window.addEventListener('focus', refreshFromPreference);
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) refreshFromPreference();
+        });
+        window.addEventListener('storage', function (event) {
+            if (event.key === storageKey) refreshFromPreference();
+        });
+
+        // Protege os atributos do <html> caso algum carregamento de rota os remova.
+        const observer = new MutationObserver(function (mutations) {
+            if (applying) return;
+            const lostTheme = mutations.some(function (mutation) {
+                return mutation.type === 'attributes' &&
+                    (mutation.attributeName === 'data-theme' ||
+                     mutation.attributeName === 'data-theme-mode' ||
+                     mutation.attributeName === 'data-bs-theme');
+            });
+            if (lostTheme) queueMicrotask(refreshFromPreference);
+        });
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-theme', 'data-theme-mode', 'data-bs-theme']
+        });
+
         listening = true;
     }
 
@@ -61,13 +109,12 @@
             return apply(mode, true);
         },
         refresh: function () {
-            return apply(configuredMode, false);
+            ensureListener();
+            return refreshFromPreference();
         },
         initializeEarly: function () {
-            let saved = 'automatico';
-            try { saved = localStorage.getItem(storageKey) || 'automatico'; } catch { }
             ensureListener();
-            return apply(saved, false);
+            return refreshFromPreference();
         }
     };
 })();
