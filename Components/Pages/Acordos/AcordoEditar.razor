@@ -114,9 +114,22 @@ else
 
             <div class="col-12">
                 <label class="form-label">Arquivos do acordo</label>
-                <InputFile class="form-control" OnChange="OnArquivosSelected" accept=".pdf,.docx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple />
-                <div class="form-text">Formatos permitidos: PDF, DOCX, JPG, JPEG e PNG. Você pode selecionar vários arquivos de uma vez ou adicionar novos arquivos em seleções posteriores. Limite de 10 MB por arquivo.</div>
-                @if (processandoArquivos)
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-lg">
+                        <InputFile @key="inputFileKey" class="form-control" OnChange="OnArquivosSelected" accept=".pdf,.docx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple />
+                    </div>
+                    <div class="col-12 col-lg-auto d-grid">
+                        <button type="button" class="btn btn-outline-primary" @onclick="ImportarArquivosSelecionados" disabled="@(processandoArquivos || arquivosPendentes.Count == 0)">
+                            <i class="bi bi-upload me-1"></i> @(processandoArquivos ? "Importando..." : "Importar arquivos")
+                        </button>
+                    </div>
+                </div>
+                <div class="form-text">Formatos permitidos: PDF, DOCX, JPG, JPEG e PNG. Selecione os arquivos, clique em Importar arquivos e confira a lista antes de salvar. Limite de 10 MB por arquivo.</div>
+                @if (arquivosPendentes.Count > 0 && !processandoArquivos)
+                {
+                    <div class="alert alert-warning py-2 mt-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>@arquivosPendentes.Count arquivo(s) selecionado(s), mas ainda não importado(s). Clique em <strong>Importar arquivos</strong>.</div>
+                }
+                else if (processandoArquivos)
                 {
                     <div class="alert alert-info py-2 mt-2 mb-0"><span class="spinner-border spinner-border-sm me-2"></span>Importando os arquivos. Aguarde para salvar o acordo...</div>
                 }
@@ -183,7 +196,7 @@ else
         }
 
         <div class="mt-3">
-            <button type="submit" class="btn btn-primary" disabled="@(salvando || processandoArquivos)"><i class="bi bi-check-lg"></i> @(salvando ? "Salvando..." : processandoArquivos ? "Importando arquivos..." : "Salvar acordo")</button>
+            <button type="submit" class="btn btn-primary" disabled="@(salvando || processandoArquivos || arquivosPendentes.Count > 0)"><i class="bi bi-check-lg"></i> @(salvando ? "Salvando..." : processandoArquivos ? "Importando arquivos..." : "Salvar acordo")</button>
             <a href="clientes/@cliente.Id" class="btn btn-secondary">Cancelar</a>
         </div>
     </EditForm>
@@ -198,6 +211,8 @@ else
     private bool salvando;
     private bool processandoArquivos;
     private string? mensagemArquivos;
+    private IReadOnlyList<IBrowserFile> arquivosPendentes = Array.Empty<IBrowserFile>();
+    private int inputFileKey;
     private Cliente? cliente;
     private Acordo modelo = new();
     private List<Empresa> empresasDoCliente = new();
@@ -282,23 +297,28 @@ else
         [".png"] = "image/png"
     };
 
-    private async Task OnArquivosSelected(InputFileChangeEventArgs e)
+    private Task OnArquivosSelected(InputFileChangeEventArgs e)
+    {
+        const int maxArquivosPorSelecao = 50;
+        arquivosPendentes = e.GetMultipleFiles(maxArquivosPorSelecao).ToArray();
+        mensagemArquivos = arquivosPendentes.Count == 0
+            ? null
+            : $"{arquivosPendentes.Count} arquivo(s) selecionado(s). Clique em Importar arquivos para adicioná-los ao acordo.";
+        return Task.CompletedTask;
+    }
+
+    private async Task ImportarArquivosSelecionados()
     {
         const long maxPorArquivo = 10 * 1024 * 1024;
-        const int maxArquivosPorSelecao = 50;
+        if (arquivosPendentes.Count == 0 || processandoArquivos)
+            return;
 
-        // Capture a lista antes de qualquer nova renderização. No Blazor Server,
-        // renderizar o InputFile enquanto os streams ainda estão sendo lidos pode
-        // invalidar parte das referências do navegador e fazer somente alguns dos
-        // arquivos selecionados chegarem ao servidor.
-        var arquivosDaSelecao = e.GetMultipleFiles(maxArquivosPorSelecao).ToArray();
-
+        var arquivosDaSelecao = arquivosPendentes.ToArray();
         processandoArquivos = true;
-        mensagemArquivos = $"Importando {arquivosDaSelecao.Length} arquivo(s)...";
-        await InvokeAsync(StateHasChanged);
-
+        mensagemArquivos = null;
         var adicionados = 0;
         var falhas = new List<string>();
+
         try
         {
             foreach (var file in arquivosDaSelecao)
@@ -311,24 +331,13 @@ else
                         falhas.Add($"{file.Name}: formato não permitido");
                         continue;
                     }
-
-                    if (file.Size <= 0)
-                    {
-                        falhas.Add($"{file.Name}: arquivo vazio");
-                        continue;
-                    }
-
-                    if (file.Size > maxPorArquivo)
-                    {
-                        falhas.Add($"{file.Name}: ultrapassa 10 MB");
-                        continue;
-                    }
+                    if (file.Size <= 0) { falhas.Add($"{file.Name}: arquivo vazio"); continue; }
+                    if (file.Size > maxPorArquivo) { falhas.Add($"{file.Name}: ultrapassa 10 MB"); continue; }
 
                     await using var stream = file.OpenReadStream(maxAllowedSize: maxPorArquivo);
                     using var ms = new MemoryStream(capacity: checked((int)file.Size));
                     await stream.CopyToAsync(ms);
                     var conteudo = ms.ToArray();
-
                     if (conteudo.LongLength != file.Size)
                     {
                         falhas.Add($"{file.Name}: leitura incompleta ({conteudo.LongLength} de {file.Size} bytes)");
@@ -350,13 +359,14 @@ else
             }
 
             mensagemArquivos = falhas.Count == 0
-                ? $"{adicionados} arquivo(s) importado(s) e pronto(s) para salvar."
+                ? $"{adicionados} arquivo(s) importado(s) e adicionado(s) ao acordo. Agora clique em Salvar acordo."
                 : $"{adicionados} de {arquivosDaSelecao.Length} arquivo(s) importado(s). Não importados: {string.Join("; ", falhas)}";
         }
         finally
         {
+            arquivosPendentes = Array.Empty<IBrowserFile>();
+            inputFileKey++;
             processandoArquivos = false;
-            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -420,6 +430,11 @@ else
     private async Task Salvar()
     {
         erroFinanceiro = null;
+        if (arquivosPendentes.Count > 0)
+        {
+            mensagemArquivos = "Existem arquivos selecionados que ainda não foram importados. Clique em Importar arquivos antes de salvar.";
+            return;
+        }
         if (!IsEdit)
         {
             if (modelo.ValorEntrada < 0 || modelo.ValorEntrada >= modelo.ValorTotal)
