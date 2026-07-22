@@ -96,7 +96,7 @@ else
                         <tr class="@LinhaClasse(p)">
                             <td class="d-none d-md-table-cell">@p.Acordo?.Empresa?.Nome</td>
                             <td>
-                                <a href="acordos/@p.AcordoId" data-enhance-nav="false">@p.Acordo?.Cliente?.Nome</a>
+                                <a href="acordos/@p.AcordoId">@p.Acordo?.Cliente?.Nome</a>
                             </td>
                             <td class="d-none d-lg-table-cell">@p.Acordo?.NumeroProcesso</td>
                             <td><span class="badge @(p.Tipo == TipoMovimentoFinanceiro.Entrada ? "bg-primary" : "bg-secondary")">@p.DescricaoMovimento</span></td>

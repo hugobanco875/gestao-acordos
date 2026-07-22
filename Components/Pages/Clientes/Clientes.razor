@@ -17,7 +17,7 @@
 @if (empresas is not null && empresas.Count == 0)
 {
     <div class="alert alert-warning">
-        Cadastre uma <a href="empresas" data-enhance-nav="false">empresa</a> antes de cadastrar clientes.
+        Cadastre uma <a href="empresas">empresa</a> antes de cadastrar clientes.
     </div>
 }
 
@@ -61,7 +61,7 @@ else
                             <td class="d-none d-md-table-cell">@c.Telefone</td>
                             <td class="text-center">@c.Acordos.Count</td>
                             <td class="text-end text-nowrap">
-                                <a class="btn btn-sm btn-outline-success" href="clientes/@c.Id" data-enhance-nav="false" title="Acordos"><i class="bi bi-folder2-open"></i></a>
+                                <a class="btn btn-sm btn-outline-success" href="clientes/@c.Id" title="Acordos"><i class="bi bi-folder2-open"></i></a>
                                 <button class="btn btn-sm btn-outline-primary" @onclick="() => Editar(c)" title="Editar"><i class="bi bi-pencil"></i></button>
                                 <button class="btn btn-sm btn-outline-danger" @onclick="() => Excluir(c)" title="Excluir"><i class="bi bi-trash"></i></button>
                             </td>

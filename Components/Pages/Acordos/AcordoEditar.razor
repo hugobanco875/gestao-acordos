@@ -19,7 +19,7 @@ else if (cliente is null)
 else
 {
     <div class="mb-3">
-        <a href="clientes/@cliente.Id" data-enhance-nav="false" class="btn btn-sm btn-link px-0"><i class="bi bi-arrow-left"></i> Voltar</a>
+        <a href="clientes/@cliente.Id" class="btn btn-sm btn-link px-0"><i class="bi bi-arrow-left"></i> Voltar</a>
         <h1 class="h3 mb-0">@(IsEdit ? "Editar acordo" : "Novo acordo")</h1>
         <div class="text-muted small"><i class="bi bi-person"></i> @cliente.Nome</div>
     </div>
@@ -132,7 +132,7 @@ else
                         <div class="list-group list-group-flush">
                             @foreach (var arquivo in arquivosExistentes)
                             {
-                                <div class="list-group-item d-flex align-items-center justify-content-between gap-2">
+                                <div @key="arquivo.Id" class="list-group-item d-flex align-items-center justify-content-between gap-2">
                                     <div class="min-w-0"><div class="text-truncate fw-medium">@arquivo.NomeArquivo</div><div class="small text-muted">@FormatarTamanho(arquivo.TamanhoBytes)</div></div>
                                     <div class="d-flex gap-1 flex-shrink-0">
                                         <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => ExibirArquivoExistente(arquivo.Id)"><i class="bi bi-eye"></i> Exibir</button>
@@ -143,7 +143,7 @@ else
                             }
                             @foreach (var arquivo in arquivosSelecionados)
                             {
-                                <div class="list-group-item d-flex align-items-center justify-content-between gap-2">
+                                <div @key="arquivo" class="list-group-item d-flex align-items-center justify-content-between gap-2">
                                     <div class="min-w-0"><div class="text-truncate fw-medium">@arquivo.Nome</div><div class="small text-success">Novo arquivo · @FormatarTamanho(arquivo.Conteudo.LongLength)</div></div>
                                     <div class="d-flex gap-1 flex-shrink-0">
                                         <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => ExibirArquivoSelecionado(arquivo)"><i class="bi bi-eye"></i> Exibir</button>
@@ -184,7 +184,7 @@ else
 
         <div class="mt-3">
             <button type="submit" class="btn btn-primary" disabled="@(salvando || processandoArquivos)"><i class="bi bi-check-lg"></i> @(salvando ? "Salvando..." : processandoArquivos ? "Importando arquivos..." : "Salvar acordo")</button>
-            <a href="clientes/@cliente.Id" data-enhance-nav="false" class="btn btn-secondary">Cancelar</a>
+            <a href="clientes/@cliente.Id" class="btn btn-secondary">Cancelar</a>
         </div>
     </EditForm>
 }
@@ -285,53 +285,73 @@ else
     private async Task OnArquivosSelected(InputFileChangeEventArgs e)
     {
         const long maxPorArquivo = 10 * 1024 * 1024;
-        const int maxArquivosPorSelecao = 20;
+        const int maxArquivosPorSelecao = 50;
+
+        // Capture a lista antes de qualquer nova renderização. No Blazor Server,
+        // renderizar o InputFile enquanto os streams ainda estão sendo lidos pode
+        // invalidar parte das referências do navegador e fazer somente alguns dos
+        // arquivos selecionados chegarem ao servidor.
+        var arquivosDaSelecao = e.GetMultipleFiles(maxArquivosPorSelecao).ToArray();
 
         processandoArquivos = true;
-        mensagemArquivos = null;
+        mensagemArquivos = $"Importando {arquivosDaSelecao.Length} arquivo(s)...";
         await InvokeAsync(StateHasChanged);
 
         var adicionados = 0;
+        var falhas = new List<string>();
         try
         {
-            foreach (var file in e.GetMultipleFiles(maxArquivosPorSelecao))
+            foreach (var file in arquivosDaSelecao)
             {
-                var extensao = Path.GetExtension(file.Name);
-                if (string.IsNullOrWhiteSpace(extensao) || !TiposPermitidos.TryGetValue(extensao, out var contentTypeEsperado))
+                try
                 {
-                    await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} não é permitido. Envie somente PDF, DOCX, JPG, JPEG ou PNG.");
-                    continue;
-                }
+                    var extensao = Path.GetExtension(file.Name);
+                    if (string.IsNullOrWhiteSpace(extensao) || !TiposPermitidos.TryGetValue(extensao, out var contentTypeEsperado))
+                    {
+                        falhas.Add($"{file.Name}: formato não permitido");
+                        continue;
+                    }
 
-                if (file.Size <= 0)
-                {
-                    await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} está vazio e não foi anexado.");
-                    continue;
-                }
+                    if (file.Size <= 0)
+                    {
+                        falhas.Add($"{file.Name}: arquivo vazio");
+                        continue;
+                    }
 
-                if (file.Size > maxPorArquivo)
-                {
-                    await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} ultrapassa o limite de 10 MB.");
-                    continue;
-                }
+                    if (file.Size > maxPorArquivo)
+                    {
+                        falhas.Add($"{file.Name}: ultrapassa 10 MB");
+                        continue;
+                    }
 
-                using var ms = new MemoryStream();
-                await file.OpenReadStream(maxAllowedSize: maxPorArquivo).CopyToAsync(ms);
-                arquivosSelecionados.Add(new ArquivoSelecionado
+                    await using var stream = file.OpenReadStream(maxAllowedSize: maxPorArquivo);
+                    using var ms = new MemoryStream(capacity: checked((int)file.Size));
+                    await stream.CopyToAsync(ms);
+                    var conteudo = ms.ToArray();
+
+                    if (conteudo.LongLength != file.Size)
+                    {
+                        falhas.Add($"{file.Name}: leitura incompleta ({conteudo.LongLength} de {file.Size} bytes)");
+                        continue;
+                    }
+
+                    arquivosSelecionados.Add(new ArquivoSelecionado
+                    {
+                        Nome = Path.GetFileName(file.Name),
+                        ContentType = contentTypeEsperado,
+                        Conteudo = conteudo
+                    });
+                    adicionados++;
+                }
+                catch (Exception ex)
                 {
-                    Nome = Path.GetFileName(file.Name),
-                    ContentType = contentTypeEsperado,
-                    Conteudo = ms.ToArray()
-                });
-                adicionados++;
+                    falhas.Add($"{file.Name}: {ex.Message}");
+                }
             }
 
-            mensagemArquivos = adicionados switch
-            {
-                0 => null,
-                1 => "Arquivo importado e pronto para ser salvo junto com o acordo.",
-                _ => $"{adicionados} arquivos importados e prontos para serem salvos junto com o acordo."
-            };
+            mensagemArquivos = falhas.Count == 0
+                ? $"{adicionados} arquivo(s) importado(s) e pronto(s) para salvar."
+                : $"{adicionados} de {arquivosDaSelecao.Length} arquivo(s) importado(s). Não importados: {string.Join("; ", falhas)}";
         }
         finally
         {
@@ -436,10 +456,14 @@ else
                 acordo.Descricao = modelo.Descricao;
                 await RemoverAnexosMarcados(db, acordo);
 
+                var quantidadeAntes = await db.AcordoAnexos.CountAsync(x => x.AcordoId == acordo.Id);
                 foreach (var arquivo in arquivosSelecionados)
                     db.AcordoAnexos.Add(CriarAnexo(acordo.Id, arquivo));
 
                 await db.SaveChangesAsync();
+                var quantidadeDepois = await db.AcordoAnexos.CountAsync(x => x.AcordoId == acordo.Id);
+                if (quantidadeDepois != quantidadeAntes + arquivosSelecionados.Count - arquivosParaRemover.Count(x => x > 0))
+                    throw new InvalidOperationException("Nem todos os anexos foram confirmados no banco de dados.");
             }
             else
             {
@@ -474,7 +498,12 @@ else
                     db.AcordoAnexos.Add(CriarAnexo(modelo.Id, arquivo));
 
                 if (arquivosSelecionados.Count > 0)
+                {
                     await db.SaveChangesAsync();
+                    var anexosGravados = await db.AcordoAnexos.CountAsync(x => x.AcordoId == modelo.Id);
+                    if (anexosGravados != arquivosSelecionados.Count)
+                        throw new InvalidOperationException($"Foram selecionados {arquivosSelecionados.Count} arquivo(s), mas apenas {anexosGravados} foram confirmados no banco de dados.");
+                }
             }
 
             await tx.CommitAsync();
