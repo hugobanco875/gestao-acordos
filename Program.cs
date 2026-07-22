@@ -96,6 +96,7 @@ builder.Services.AddScoped<AdministradorService>();
 builder.Services.AddScoped<RelatorioService>();
 builder.Services.AddScoped<BackupService>();
 builder.Services.AddScoped<ConfiguracaoService>();
+builder.Services.AddSingleton<TemporaryUploadService>();
 builder.Services.AddHttpClient<EnderecoService>();
 builder.Services.AddHttpClient<CnpjService>();
 
@@ -159,6 +160,51 @@ app.Use(async (context, next) =>
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapPost("/api/acordos/upload-temporario", async (HttpRequest request, TemporaryUploadService uploads) =>
+{
+    const long maxSize = 10 * 1024 * 1024;
+    if (!request.HasFormContentType)
+        return Results.BadRequest(new { error = "Requisição de upload inválida." });
+
+    var form = await request.ReadFormAsync();
+    var file = form.Files.GetFile("file");
+    if (file is null)
+        return Results.BadRequest(new { error = "Nenhum arquivo foi recebido." });
+
+    var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+    var allowed = new Dictionary<string, string>
+    {
+        [".pdf"] = "application/pdf",
+        [".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+        [".png"] = "image/png"
+    };
+
+    if (!allowed.TryGetValue(extension, out var expectedContentType))
+        return Results.BadRequest(new { error = "Formato não permitido. Use PDF, DOCX, JPG, JPEG ou PNG." });
+    if (file.Length <= 0)
+        return Results.BadRequest(new { error = "O arquivo está vazio." });
+    if (file.Length > maxSize)
+        return Results.BadRequest(new { error = "O arquivo ultrapassa o limite de 10 MB." });
+
+    await using var input = file.OpenReadStream(maxSize);
+    using var memory = new MemoryStream(capacity: checked((int)file.Length));
+    await input.CopyToAsync(memory);
+    var content = memory.ToArray();
+    if (content.LongLength != file.Length)
+        return Results.BadRequest(new { error = "O arquivo não foi recebido por completo." });
+
+    var token = uploads.Store(file.FileName, expectedContentType, content);
+    return Results.Ok(new
+    {
+        token,
+        name = Path.GetFileName(file.FileName),
+        contentType = expectedContentType,
+        size = content.LongLength
+    });
+}).RequireAuthorization();
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

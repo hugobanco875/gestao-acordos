@@ -2,9 +2,11 @@
 @page "/acordos/{Id:int}/editar"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject TemporaryUploadService TemporaryUploads
 
 <PageTitle>Acordo</PageTitle>
 
@@ -113,16 +115,33 @@ else
             }
 
             <div class="col-12">
-                <div class="d-flex align-items-center justify-content-between gap-2 mb-1"><label class="form-label mb-0">Arquivos do acordo</label><span class="badge text-bg-success">UPLOAD V3</span></div>
-                <InputFile @key="inputFileKey" class="form-control" OnChange="OnArquivosSelected" accept=".pdf,.docx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple disabled="@processandoArquivos" />
-                <div class="form-text"><strong>Upload novo V3:</strong> selecione os arquivos e aguarde cada item chegar a 100%. O botão Salvar acordo permanece bloqueado durante o envio. Formatos: PDF, DOCX, JPG, JPEG e PNG. Limite de 10 MB por arquivo.</div>
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-1"><label class="form-label mb-0">Arquivos do acordo</label><span class="badge text-bg-primary">IMPORTAÇÃO DIRETA</span></div>
+                <InputFile id="agreement-file-input" @key="inputFileKey" class="form-control" OnChange="OnArquivosSelecionados" accept=".pdf,.docx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple disabled="@processandoArquivos" />
+                <div class="form-text">Selecione os arquivos e depois clique em <strong>Importar arquivos</strong>. Eles serão enviados diretamente ao servidor e aparecerão na lista antes de você salvar o acordo. Limite de 10 MB por arquivo.</div>
 
                 @if (uploadsEmAndamento.Count > 0)
                 {
+                    <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                        <button type="button" class="btn btn-outline-primary" @onclick="ImportarArquivos" disabled="@(processandoArquivos || !TemArquivosAguardandoImportacao)">
+                            @if (processandoArquivos)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span><span>Importando...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-cloud-arrow-up me-1"></i><span>Importar arquivos (@uploadsEmAndamento.Count)</span>
+                            }
+                        </button>
+                        @if (TemArquivosAguardandoImportacao && !processandoArquivos)
+                        {
+                            <span class="small text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Os arquivos ainda não fazem parte do acordo.</span>
+                        }
+                    </div>
+
                     <div class="border rounded-3 mt-3 overflow-hidden">
                         <div class="px-3 py-2 bg-body-tertiary fw-semibold d-flex justify-content-between">
-                            <span><i class="bi bi-cloud-arrow-up me-1"></i> Enviando arquivos</span>
-                            <span>@uploadsConcluidos/@uploadsEmAndamento.Count concluído(s)</span>
+                            <span><i class="bi bi-cloud-arrow-up me-1"></i> Arquivos selecionados</span>
+                            <span>@uploadsConcluidos/@uploadsEmAndamento.Count importado(s)</span>
                         </div>
                         <div class="list-group list-group-flush">
                             @foreach (var upload in uploadsEmAndamento)
@@ -130,10 +149,10 @@ else
                                 <div @key="upload.Id" class="list-group-item">
                                     <div class="d-flex justify-content-between gap-2 mb-1">
                                         <span class="text-truncate">@upload.Nome</span>
-                                        <span class="small text-muted flex-shrink-0">@upload.Progresso%</span>
+                                        <span class="small text-muted flex-shrink-0">@(upload.Concluido ? "100%" : upload.Falhou ? "Falhou" : processandoArquivos ? $"{upload.Progresso}%" : "Aguardando")</span>
                                     </div>
                                     <div class="progress" role="progressbar" aria-valuenow="@upload.Progresso" aria-valuemin="0" aria-valuemax="100" style="height: 8px;">
-                                        <div class="progress-bar @(upload.Falhou ? "bg-danger" : upload.Concluido ? "bg-success" : "progress-bar-striped progress-bar-animated")" style="width: @($"{upload.Progresso}%")"></div>
+                                        <div class="progress-bar @(upload.Falhou ? "bg-danger" : upload.Concluido ? "bg-success" : processandoArquivos ? "progress-bar-striped progress-bar-animated" : "bg-secondary")" style="width: @($"{upload.Progresso}%")"></div>
                                     </div>
                                     @if (!string.IsNullOrWhiteSpace(upload.Erro))
                                     {
@@ -145,11 +164,7 @@ else
                     </div>
                 }
 
-                @if (processandoArquivos)
-                {
-                    <div class="alert alert-info py-2 mt-2 mb-0"><span class="spinner-border spinner-border-sm me-2"></span>Enviando os arquivos. O botão Salvar será liberado quando todos chegarem a 100%.</div>
-                }
-                else if (!string.IsNullOrWhiteSpace(mensagemArquivos))
+                @if (!string.IsNullOrWhiteSpace(mensagemArquivos))
                 {
                     <div class="alert @(houveFalhaUpload ? "alert-warning" : "alert-success") py-2 mt-2 mb-0"><i class="bi @(houveFalhaUpload ? "bi-exclamation-triangle" : "bi-check-circle") me-1"></i>@mensagemArquivos</div>
                 }
@@ -172,8 +187,8 @@ else
                             }
                             @foreach (var arquivo in arquivosSelecionados)
                             {
-                                <div @key="arquivo" class="list-group-item d-flex align-items-center justify-content-between gap-2">
-                                    <div class="min-w-0"><div class="text-truncate fw-medium">@arquivo.Nome</div><div class="small text-success">Novo arquivo · @FormatarTamanho(arquivo.Conteudo.LongLength)</div></div>
+                                <div @key="arquivo.Token" class="list-group-item d-flex align-items-center justify-content-between gap-2">
+                                    <div class="min-w-0"><div class="text-truncate fw-medium">@arquivo.Nome</div><div class="small text-success">Importado · @FormatarTamanho(arquivo.TamanhoBytes)</div></div>
                                     <div class="d-flex gap-1 flex-shrink-0">
                                         <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => ExibirArquivoSelecionado(arquivo)"><i class="bi bi-eye"></i> Exibir</button>
                                         <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => BaixarArquivoSelecionado(arquivo)" title="Baixar arquivo" aria-label="Baixar arquivo"><i class="bi bi-download"></i></button>
@@ -212,7 +227,7 @@ else
         }
 
         <div class="mt-3">
-            <button type="submit" class="btn btn-primary" disabled="@(salvando || processandoArquivos)"><i class="bi bi-check-lg"></i> @(salvando ? "Salvando..." : processandoArquivos ? "Importando arquivos..." : "Salvar acordo")</button>
+            <button type="submit" class="btn btn-primary" disabled="@(salvando || processandoArquivos || TemArquivosAguardandoImportacao)"><i class="bi bi-check-lg"></i> @(salvando ? "Salvando..." : processandoArquivos ? "Importando arquivos..." : TemArquivosAguardandoImportacao ? "Importe os arquivos" : "Salvar acordo")</button>
             <a href="clientes/@cliente.Id" class="btn btn-secondary">Cancelar</a>
         </div>
     </EditForm>
@@ -229,8 +244,10 @@ else
     private string? mensagemArquivos;
     private int inputFileKey;
     private bool houveFalhaUpload;
+    private DotNetObjectReference<AcordoEditar>? uploadDotNetRef;
     private readonly List<UploadArquivoStatus> uploadsEmAndamento = new();
-    private int uploadsConcluidos => uploadsEmAndamento.Count(x => x.Concluido || x.Falhou);
+    private int uploadsConcluidos => uploadsEmAndamento.Count(x => x.Concluido);
+    private bool TemArquivosAguardandoImportacao => uploadsEmAndamento.Any(x => !x.Concluido && !x.Falhou);
     private Cliente? cliente;
     private Acordo modelo = new();
     private List<Empresa> empresasDoCliente = new();
@@ -239,7 +256,7 @@ else
 
     private sealed class UploadArquivoStatus
     {
-        public Guid Id { get; } = Guid.NewGuid();
+        public string Id { get; } = Guid.NewGuid().ToString("N");
         public string Nome { get; init; } = string.Empty;
         public int Progresso { get; set; }
         public bool Concluido { get; set; }
@@ -249,9 +266,10 @@ else
 
     private sealed class ArquivoSelecionado
     {
+        public Guid Token { get; init; }
         public string Nome { get; init; } = string.Empty;
         public string ContentType { get; init; } = "application/octet-stream";
-        public byte[] Conteudo { get; init; } = Array.Empty<byte>();
+        public long TamanhoBytes { get; init; }
     }
 
     private sealed class ArquivoExistenteResumo
@@ -326,111 +344,97 @@ else
         [".png"] = "image/png"
     };
 
-    private async Task OnArquivosSelected(InputFileChangeEventArgs e)
+    private Task OnArquivosSelecionados(InputFileChangeEventArgs e)
     {
+        if (processandoArquivos)
+            return Task.CompletedTask;
+
         const int maxArquivosPorSelecao = 50;
-        var arquivos = e.GetMultipleFiles(maxArquivosPorSelecao).ToArray();
-        if (arquivos.Length == 0 || processandoArquivos)
+        var arquivos = e.GetMultipleFiles(maxArquivosPorSelecao);
+        uploadsEmAndamento.Clear();
+        uploadsEmAndamento.AddRange(arquivos.Select(f => new UploadArquivoStatus { Nome = f.Name, Progresso = 0 }));
+        mensagemArquivos = null;
+        houveFalhaUpload = false;
+        return Task.CompletedTask;
+    }
+
+    private async Task ImportarArquivos()
+    {
+        if (processandoArquivos || !TemArquivosAguardandoImportacao)
             return;
 
         processandoArquivos = true;
-        houveFalhaUpload = false;
         mensagemArquivos = null;
-        uploadsEmAndamento.Clear();
-        uploadsEmAndamento.AddRange(arquivos.Select(f => new UploadArquivoStatus { Nome = f.Name }));
+        houveFalhaUpload = false;
+        uploadDotNetRef?.Dispose();
+        uploadDotNetRef = DotNetObjectReference.Create(this);
 
-        // Três transferências simultâneas reduzem bastante o tempo total sem
-        // sobrecarregar o circuito SignalR do Blazor Server.
-        using var limiteParalelo = new SemaphoreSlim(3, 3);
-        var tarefas = arquivos.Select((arquivo, indice) => ProcessarArquivoAsync(arquivo, uploadsEmAndamento[indice], limiteParalelo)).ToArray();
-        var resultados = await Task.WhenAll(tarefas);
-
-        foreach (var resultado in resultados.Where(x => x.Arquivo is not null))
-            arquivosSelecionados.Add(resultado.Arquivo!);
-
-        var importados = resultados.Count(x => x.Arquivo is not null);
-        var falhas = resultados.Where(x => x.Arquivo is null).Select(x => x.Erro).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
-        houveFalhaUpload = falhas.Length > 0;
-        mensagemArquivos = houveFalhaUpload
-            ? $"{importados} de {arquivos.Length} arquivo(s) importado(s). Verifique os itens com erro antes de salvar."
-            : $"{importados} arquivo(s) importado(s) com sucesso e adicionados ao acordo. Agora você pode salvar.";
-
-        processandoArquivos = false;
-        inputFileKey++;
-    }
-
-    private async Task<(ArquivoSelecionado? Arquivo, string? Erro)> ProcessarArquivoAsync(IBrowserFile file, UploadArquivoStatus status, SemaphoreSlim limiteParalelo)
-    {
-        const long maxPorArquivo = 10 * 1024 * 1024;
-        await limiteParalelo.WaitAsync();
+        var itens = uploadsEmAndamento.Select(x => new { id = x.Id }).ToArray();
         try
         {
-            var extensao = Path.GetExtension(file.Name);
-            if (string.IsNullOrWhiteSpace(extensao) || !TiposPermitidos.TryGetValue(extensao, out var contentTypeEsperado))
-                return Falhar(status, "Formato não permitido.");
-            if (file.Size <= 0)
-                return Falhar(status, "O arquivo está vazio.");
-            if (file.Size > maxPorArquivo)
-                return Falhar(status, "O arquivo ultrapassa o limite de 10 MB.");
-
-            await using var stream = file.OpenReadStream(maxAllowedSize: maxPorArquivo);
-            using var ms = new MemoryStream(capacity: checked((int)file.Size));
-            var buffer = new byte[128 * 1024];
-            long totalLido = 0;
-            var ultimoPercentualNotificado = -1;
-
-            while (true)
-            {
-                var lidos = await stream.ReadAsync(buffer);
-                if (lidos == 0)
-                    break;
-
-                await ms.WriteAsync(buffer.AsMemory(0, lidos));
-                totalLido += lidos;
-                var percentual = (int)Math.Min(99, totalLido * 100 / file.Size);
-
-                // Atualiza a tela em intervalos de 5%, evitando centenas de
-                // renderizações que tornavam o upload muito lento.
-                if (percentual >= ultimoPercentualNotificado + 5)
-                {
-                    ultimoPercentualNotificado = percentual;
-                    status.Progresso = percentual;
-                    await InvokeAsync(StateHasChanged);
-                }
-            }
-
-            var conteudo = ms.ToArray();
-            if (conteudo.LongLength != file.Size)
-                return Falhar(status, $"Leitura incompleta: {conteudo.LongLength} de {file.Size} bytes.");
-
-            status.Progresso = 100;
-            status.Concluido = true;
-            await InvokeAsync(StateHasChanged);
-
-            return (new ArquivoSelecionado
-            {
-                Nome = Path.GetFileName(file.Name),
-                ContentType = contentTypeEsperado,
-                Conteudo = conteudo
-            }, null);
+            await JS.InvokeVoidAsync("agreementUpload.importFiles", "agreement-file-input", "/api/acordos/upload-temporario", itens, uploadDotNetRef, 3);
         }
         catch (Exception ex)
         {
-            return Falhar(status, ex.Message);
-        }
-        finally
-        {
-            limiteParalelo.Release();
+            processandoArquivos = false;
+            houveFalhaUpload = true;
+            mensagemArquivos = $"Não foi possível iniciar a importação: {ex.Message}";
         }
     }
 
-    private (ArquivoSelecionado? Arquivo, string? Erro) Falhar(UploadArquivoStatus status, string erro)
+    [JSInvokable]
+    public Task AtualizarProgressoUpload(string itemId, int progresso)
     {
-        status.Falhou = true;
-        status.Erro = erro;
-        status.Progresso = 100;
-        _ = InvokeAsync(StateHasChanged);
-        return (null, $"{status.Nome}: {erro}");
+        var item = uploadsEmAndamento.FirstOrDefault(x => x.Id == itemId);
+        if (item is not null && !item.Concluido && !item.Falhou)
+            item.Progresso = Math.Clamp(progresso, 0, 99);
+        return InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task ConcluirUpload(string itemId, string token, string nome, string contentType, long tamanho)
+    {
+        var item = uploadsEmAndamento.FirstOrDefault(x => x.Id == itemId);
+        if (item is null || !Guid.TryParse(token, out var uploadToken))
+            return Task.CompletedTask;
+
+        item.Progresso = 100;
+        item.Concluido = true;
+        arquivosSelecionados.Add(new ArquivoSelecionado
+        {
+            Token = uploadToken,
+            Nome = nome,
+            ContentType = contentType,
+            TamanhoBytes = tamanho
+        });
+        return InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task FalharUpload(string itemId, string erro)
+    {
+        var item = uploadsEmAndamento.FirstOrDefault(x => x.Id == itemId);
+        if (item is not null)
+        {
+            item.Falhou = true;
+            item.Erro = erro;
+            item.Progresso = 100;
+        }
+        houveFalhaUpload = true;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task FinalizarLoteUpload()
+    {
+        processandoArquivos = false;
+        var importados = uploadsEmAndamento.Count(x => x.Concluido);
+        var falhas = uploadsEmAndamento.Count(x => x.Falhou);
+        mensagemArquivos = falhas > 0
+            ? $"{importados} arquivo(s) importado(s) e {falhas} com falha. Selecione novamente os arquivos que falharam."
+            : $"{importados} arquivo(s) importado(s) com sucesso. Agora clique em Salvar acordo.";
+        inputFileKey++;
+        return InvokeAsync(StateHasChanged);
     }
 
     private async Task ExibirArquivoExistente(int id)
@@ -452,11 +456,25 @@ else
         await JS.InvokeVoidAsync("appDownload.openFile", nomeArquivo, contentType, Convert.ToBase64String(conteudo));
     }
 
-    private Task ExibirArquivoSelecionado(ArquivoSelecionado arquivo)
-        => JS.InvokeVoidAsync("appDownload.openFile", arquivo.Nome, arquivo.ContentType, Convert.ToBase64String(arquivo.Conteudo)).AsTask();
+    private async Task ExibirArquivoSelecionado(ArquivoSelecionado arquivo)
+    {
+        if (!TemporaryUploads.TryGet(arquivo.Token, out var upload))
+        {
+            await JS.InvokeVoidAsync("alert", "O arquivo temporário expirou. Importe-o novamente.");
+            return;
+        }
+        await JS.InvokeVoidAsync("appDownload.openFile", arquivo.Nome, arquivo.ContentType, Convert.ToBase64String(upload.Content));
+    }
 
-    private Task BaixarArquivoSelecionado(ArquivoSelecionado arquivo)
-        => JS.InvokeVoidAsync("appDownload.fromBytes", arquivo.Nome, arquivo.ContentType, Convert.ToBase64String(arquivo.Conteudo)).AsTask();
+    private async Task BaixarArquivoSelecionado(ArquivoSelecionado arquivo)
+    {
+        if (!TemporaryUploads.TryGet(arquivo.Token, out var upload))
+        {
+            await JS.InvokeVoidAsync("alert", "O arquivo temporário expirou. Importe-o novamente.");
+            return;
+        }
+        await JS.InvokeVoidAsync("appDownload.fromBytes", arquivo.Nome, arquivo.ContentType, Convert.ToBase64String(upload.Content));
+    }
 
     private async Task BaixarArquivoExistente(int id)
     {
@@ -469,7 +487,11 @@ else
         await JS.InvokeVoidAsync("appDownload.fromBytes", nomeArquivo, TipoPeloNome(nomeArquivo), Convert.ToBase64String(conteudo));
     }
 
-    private void RemoverArquivoSelecionado(ArquivoSelecionado arquivo) => arquivosSelecionados.Remove(arquivo);
+    private void RemoverArquivoSelecionado(ArquivoSelecionado arquivo)
+    {
+        TemporaryUploads.Remove(arquivo.Token);
+        arquivosSelecionados.Remove(arquivo);
+    }
 
     private async Task SolicitarRemocaoArquivoExistente(ArquivoExistenteResumo arquivo)
     {
@@ -511,12 +533,20 @@ else
             }
         }
 
-        if (processandoArquivos)
+        if (processandoArquivos || TemArquivosAguardandoImportacao)
             return;
 
         salvando = true;
         try
         {
+            var uploadsProntos = new Dictionary<Guid, TemporaryUpload>();
+            foreach (var arquivo in arquivosSelecionados)
+            {
+                if (!TemporaryUploads.TryGet(arquivo.Token, out var upload))
+                    throw new InvalidOperationException($"O arquivo '{arquivo.Nome}' expirou antes do salvamento. Importe-o novamente.");
+                uploadsProntos[arquivo.Token] = upload;
+            }
+
             await using var db = await DbFactory.CreateDbContextAsync();
             await using var tx = await db.Database.BeginTransactionAsync();
 
@@ -531,7 +561,7 @@ else
 
                 var quantidadeAntes = await db.AcordoAnexos.CountAsync(x => x.AcordoId == acordo.Id);
                 foreach (var arquivo in arquivosSelecionados)
-                    db.AcordoAnexos.Add(CriarAnexo(acordo.Id, arquivo));
+                    db.AcordoAnexos.Add(CriarAnexo(acordo.Id, arquivo, uploadsProntos[arquivo.Token]));
 
                 await db.SaveChangesAsync();
                 var quantidadeDepois = await db.AcordoAnexos.CountAsync(x => x.AcordoId == acordo.Id);
@@ -568,7 +598,7 @@ else
                 await db.SaveChangesAsync();
 
                 foreach (var arquivo in arquivosSelecionados)
-                    db.AcordoAnexos.Add(CriarAnexo(modelo.Id, arquivo));
+                    db.AcordoAnexos.Add(CriarAnexo(modelo.Id, arquivo, uploadsProntos[arquivo.Token]));
 
                 if (arquivosSelecionados.Count > 0)
                 {
@@ -580,6 +610,8 @@ else
             }
 
             await tx.CommitAsync();
+            foreach (var arquivo in arquivosSelecionados)
+                TemporaryUploads.Remove(arquivo.Token);
             Nav.NavigateTo($"clientes/{cliente!.Id}");
         }
         catch (Exception ex)
@@ -615,15 +647,23 @@ else
         }
     }
 
-    private static AcordoAnexo CriarAnexo(int acordoId, ArquivoSelecionado arquivo)
+    private static AcordoAnexo CriarAnexo(int acordoId, ArquivoSelecionado arquivo, TemporaryUpload upload)
         => new()
         {
             AcordoId = acordoId,
             NomeArquivo = arquivo.Nome,
             ContentType = arquivo.ContentType,
-            Conteudo = arquivo.Conteudo,
-            TamanhoBytes = arquivo.Conteudo.LongLength,
+            Conteudo = upload.Content,
+            TamanhoBytes = upload.Content.LongLength,
             EnviadoEm = GestaoAcordos.Services.RelogioSistema.Agora
         };
+
+    public ValueTask DisposeAsync()
+    {
+        uploadDotNetRef?.Dispose();
+        foreach (var arquivo in arquivosSelecionados)
+            TemporaryUploads.Remove(arquivo.Token);
+        return ValueTask.CompletedTask;
+    }
 
 }
