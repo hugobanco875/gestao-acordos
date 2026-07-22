@@ -54,7 +54,9 @@ public class BackupService(
             ClienteEmpresas = await db.ClienteEmpresas.AsNoTracking().ToListAsync(),
             Acordos = await db.Acordos.AsNoTracking().ToListAsync(),
             AcordosPdf = await db.AcordosPdf.AsNoTracking().ToListAsync(),
-            AcordoAnexos = await db.AcordoAnexos.AsNoTracking().ToListAsync(),
+            AcordoAnexos = await db.AcordoAnexos.AsNoTracking()
+                .Where(x => x.Conteudo != null && x.Conteudo.Length > 0)
+                .ToListAsync(),
             Parcelas = await db.Parcelas.AsNoTracking().ToListAsync(),
             ParcelaComprovantes = await db.ParcelaComprovantes.AsNoTracking().ToListAsync(),
             Eventos = await db.Eventos.AsNoTracking().ToListAsync()
@@ -166,10 +168,17 @@ public class BackupService(
         foreach (var anexo in data.AcordoAnexos ?? new List<AcordoAnexo>())
         {
             if (!acoMap.TryGetValue(anexo.AcordoId, out var novoAco)) continue;
-            anexo.Id = 0;
-            anexo.AcordoId = novoAco;
-            anexo.Acordo = null;
-            db.AcordoAnexos.Add(anexo);
+            if (anexo.Conteudo is null || anexo.Conteudo.Length == 0) continue;
+
+            db.AcordoAnexos.Add(new AcordoAnexo
+            {
+                AcordoId = novoAco,
+                NomeArquivo = anexo.NomeArquivo,
+                ContentType = anexo.ContentType,
+                Conteudo = anexo.Conteudo,
+                TamanhoBytes = anexo.Conteudo.LongLength,
+                EnviadoEm = anexo.EnviadoEm
+            });
         }
         await db.SaveChangesAsync();
 

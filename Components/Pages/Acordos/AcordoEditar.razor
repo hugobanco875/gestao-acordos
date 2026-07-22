@@ -445,7 +445,11 @@ else
             {
                 modelo.CriadoEm = GestaoAcordos.Services.RelogioSistema.Agora;
                 modelo.Parcelas = ParcelaHelper.GerarParcelas(SaldoParcelar, modelo.QuantidadeParcelas, modelo.DataPrimeiraParcela);
-                modelo.Anexos = arquivosSelecionados.Select(arquivo => CriarAnexo(0, arquivo)).ToList();
+
+                // Os anexos são inseridos explicitamente depois que o acordo recebe
+                // seu ID. Isso evita depender do rastreamento do grafo do EF e garante
+                // que todos os arquivos selecionados sejam persistidos no primeiro salvar.
+                modelo.Anexos = new List<AcordoAnexo>();
 
                 if (modelo.ValorEntrada > 0)
                 {
@@ -465,6 +469,12 @@ else
 
                 db.Acordos.Add(modelo);
                 await db.SaveChangesAsync();
+
+                foreach (var arquivo in arquivosSelecionados)
+                    db.AcordoAnexos.Add(CriarAnexo(modelo.Id, arquivo));
+
+                if (arquivosSelecionados.Count > 0)
+                    await db.SaveChangesAsync();
             }
 
             await tx.CommitAsync();

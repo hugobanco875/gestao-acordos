@@ -52,14 +52,11 @@
     function registerListeners() {
         if (listenersRegistered) return;
 
-        // A preferência salva no dispositivo é sempre reaplicada depois de qualquer navegação.
+        // Reaplica apenas quando o Blazor conclui uma navegação aprimorada ou
+        // quando outra aba altera explicitamente a preferência. Eventos de foco,
+        // visibilidade e histórico foram removidos porque disparavam repinturas
+        // frequentes e davam a impressão de refresh automático.
         document.addEventListener('enhancedload', refresh);
-        window.addEventListener('pageshow', refresh);
-        window.addEventListener('popstate', refresh);
-        window.addEventListener('focus', refresh);
-        document.addEventListener('visibilitychange', function () {
-            if (!document.hidden) refresh();
-        });
         window.addEventListener('storage', function (event) {
             if (event.key === storageKey) refresh();
         });
