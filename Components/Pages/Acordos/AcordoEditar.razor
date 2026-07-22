@@ -114,28 +114,44 @@ else
 
             <div class="col-12">
                 <label class="form-label">Arquivos do acordo</label>
-                <div class="row g-2 align-items-end">
-                    <div class="col-12 col-lg">
-                        <InputFile @key="inputFileKey" class="form-control" OnChange="OnArquivosSelected" accept=".pdf,.docx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple />
-                    </div>
-                    <div class="col-12 col-lg-auto d-grid">
-                        <button type="button" class="btn btn-outline-primary" @onclick="ImportarArquivosSelecionados" disabled="@(processandoArquivos || arquivosPendentes.Count == 0)">
-                            <i class="bi bi-upload me-1"></i> @(processandoArquivos ? "Importando..." : "Importar arquivos")
-                        </button>
-                    </div>
-                </div>
-                <div class="form-text">Formatos permitidos: PDF, DOCX, JPG, JPEG e PNG. Selecione os arquivos, clique em Importar arquivos e confira a lista antes de salvar. Limite de 10 MB por arquivo.</div>
-                @if (arquivosPendentes.Count > 0 && !processandoArquivos)
+                <InputFile @key="inputFileKey" class="form-control" OnChange="OnArquivosSelected" accept=".pdf,.docx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple disabled="@processandoArquivos" />
+                <div class="form-text">Formatos permitidos: PDF, DOCX, JPG, JPEG e PNG. A importação começa automaticamente após a seleção. Aguarde todos chegarem a 100% antes de salvar. Limite de 10 MB por arquivo.</div>
+
+                @if (uploadsEmAndamento.Count > 0)
                 {
-                    <div class="alert alert-warning py-2 mt-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>@arquivosPendentes.Count arquivo(s) selecionado(s), mas ainda não importado(s). Clique em <strong>Importar arquivos</strong>.</div>
+                    <div class="border rounded-3 mt-3 overflow-hidden">
+                        <div class="px-3 py-2 bg-body-tertiary fw-semibold d-flex justify-content-between">
+                            <span><i class="bi bi-cloud-arrow-up me-1"></i> Enviando arquivos</span>
+                            <span>@uploadsConcluidos/@uploadsEmAndamento.Count concluído(s)</span>
+                        </div>
+                        <div class="list-group list-group-flush">
+                            @foreach (var upload in uploadsEmAndamento)
+                            {
+                                <div @key="upload.Id" class="list-group-item">
+                                    <div class="d-flex justify-content-between gap-2 mb-1">
+                                        <span class="text-truncate">@upload.Nome</span>
+                                        <span class="small text-muted flex-shrink-0">@upload.Progresso%</span>
+                                    </div>
+                                    <div class="progress" role="progressbar" aria-valuenow="@upload.Progresso" aria-valuemin="0" aria-valuemax="100" style="height: 8px;">
+                                        <div class="progress-bar @(upload.Falhou ? "bg-danger" : upload.Concluido ? "bg-success" : "progress-bar-striped progress-bar-animated")" style="width: @($"{upload.Progresso}%")"></div>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(upload.Erro))
+                                    {
+                                        <div class="small text-danger mt-1">@upload.Erro</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
                 }
-                else if (processandoArquivos)
+
+                @if (processandoArquivos)
                 {
-                    <div class="alert alert-info py-2 mt-2 mb-0"><span class="spinner-border spinner-border-sm me-2"></span>Importando os arquivos. Aguarde para salvar o acordo...</div>
+                    <div class="alert alert-info py-2 mt-2 mb-0"><span class="spinner-border spinner-border-sm me-2"></span>Enviando os arquivos. O botão Salvar será liberado quando todos chegarem a 100%.</div>
                 }
                 else if (!string.IsNullOrWhiteSpace(mensagemArquivos))
                 {
-                    <div class="alert alert-success py-2 mt-2 mb-0"><i class="bi bi-check-circle me-1"></i>@mensagemArquivos</div>
+                    <div class="alert @(houveFalhaUpload ? "alert-warning" : "alert-success") py-2 mt-2 mb-0"><i class="bi @(houveFalhaUpload ? "bi-exclamation-triangle" : "bi-check-circle") me-1"></i>@mensagemArquivos</div>
                 }
 
                 @if (arquivosExistentes.Count > 0 || arquivosSelecionados.Count > 0)
@@ -196,7 +212,7 @@ else
         }
 
         <div class="mt-3">
-            <button type="submit" class="btn btn-primary" disabled="@(salvando || processandoArquivos || arquivosPendentes.Count > 0)"><i class="bi bi-check-lg"></i> @(salvando ? "Salvando..." : processandoArquivos ? "Importando arquivos..." : "Salvar acordo")</button>
+            <button type="submit" class="btn btn-primary" disabled="@(salvando || processandoArquivos)"><i class="bi bi-check-lg"></i> @(salvando ? "Salvando..." : processandoArquivos ? "Importando arquivos..." : "Salvar acordo")</button>
             <a href="clientes/@cliente.Id" class="btn btn-secondary">Cancelar</a>
         </div>
     </EditForm>
@@ -211,12 +227,25 @@ else
     private bool salvando;
     private bool processandoArquivos;
     private string? mensagemArquivos;
-    private IReadOnlyList<IBrowserFile> arquivosPendentes = Array.Empty<IBrowserFile>();
     private int inputFileKey;
+    private bool houveFalhaUpload;
+    private readonly List<UploadArquivoStatus> uploadsEmAndamento = new();
+    private int uploadsConcluidos => uploadsEmAndamento.Count(x => x.Concluido || x.Falhou);
     private Cliente? cliente;
     private Acordo modelo = new();
     private List<Empresa> empresasDoCliente = new();
     private string? erroFinanceiro;
+
+
+    private sealed class UploadArquivoStatus
+    {
+        public Guid Id { get; } = Guid.NewGuid();
+        public string Nome { get; init; } = string.Empty;
+        public int Progresso { get; set; }
+        public bool Concluido { get; set; }
+        public bool Falhou { get; set; }
+        public string? Erro { get; set; }
+    }
 
     private sealed class ArquivoSelecionado
     {
@@ -297,77 +326,111 @@ else
         [".png"] = "image/png"
     };
 
-    private Task OnArquivosSelected(InputFileChangeEventArgs e)
+    private async Task OnArquivosSelected(InputFileChangeEventArgs e)
     {
         const int maxArquivosPorSelecao = 50;
-        arquivosPendentes = e.GetMultipleFiles(maxArquivosPorSelecao).ToArray();
-        mensagemArquivos = arquivosPendentes.Count == 0
-            ? null
-            : $"{arquivosPendentes.Count} arquivo(s) selecionado(s). Clique em Importar arquivos para adicioná-los ao acordo.";
-        return Task.CompletedTask;
-    }
-
-    private async Task ImportarArquivosSelecionados()
-    {
-        const long maxPorArquivo = 10 * 1024 * 1024;
-        if (arquivosPendentes.Count == 0 || processandoArquivos)
+        var arquivos = e.GetMultipleFiles(maxArquivosPorSelecao).ToArray();
+        if (arquivos.Length == 0 || processandoArquivos)
             return;
 
-        var arquivosDaSelecao = arquivosPendentes.ToArray();
         processandoArquivos = true;
+        houveFalhaUpload = false;
         mensagemArquivos = null;
-        var adicionados = 0;
-        var falhas = new List<string>();
+        uploadsEmAndamento.Clear();
+        uploadsEmAndamento.AddRange(arquivos.Select(f => new UploadArquivoStatus { Nome = f.Name }));
 
+        // Três transferências simultâneas reduzem bastante o tempo total sem
+        // sobrecarregar o circuito SignalR do Blazor Server.
+        using var limiteParalelo = new SemaphoreSlim(3, 3);
+        var tarefas = arquivos.Select((arquivo, indice) => ProcessarArquivoAsync(arquivo, uploadsEmAndamento[indice], limiteParalelo)).ToArray();
+        var resultados = await Task.WhenAll(tarefas);
+
+        foreach (var resultado in resultados.Where(x => x.Arquivo is not null))
+            arquivosSelecionados.Add(resultado.Arquivo!);
+
+        var importados = resultados.Count(x => x.Arquivo is not null);
+        var falhas = resultados.Where(x => x.Arquivo is null).Select(x => x.Erro).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+        houveFalhaUpload = falhas.Length > 0;
+        mensagemArquivos = houveFalhaUpload
+            ? $"{importados} de {arquivos.Length} arquivo(s) importado(s). Verifique os itens com erro antes de salvar."
+            : $"{importados} arquivo(s) importado(s) com sucesso e adicionados ao acordo. Agora você pode salvar.";
+
+        processandoArquivos = false;
+        inputFileKey++;
+    }
+
+    private async Task<(ArquivoSelecionado? Arquivo, string? Erro)> ProcessarArquivoAsync(IBrowserFile file, UploadArquivoStatus status, SemaphoreSlim limiteParalelo)
+    {
+        const long maxPorArquivo = 10 * 1024 * 1024;
+        await limiteParalelo.WaitAsync();
         try
         {
-            foreach (var file in arquivosDaSelecao)
+            var extensao = Path.GetExtension(file.Name);
+            if (string.IsNullOrWhiteSpace(extensao) || !TiposPermitidos.TryGetValue(extensao, out var contentTypeEsperado))
+                return Falhar(status, "Formato não permitido.");
+            if (file.Size <= 0)
+                return Falhar(status, "O arquivo está vazio.");
+            if (file.Size > maxPorArquivo)
+                return Falhar(status, "O arquivo ultrapassa o limite de 10 MB.");
+
+            await using var stream = file.OpenReadStream(maxAllowedSize: maxPorArquivo);
+            using var ms = new MemoryStream(capacity: checked((int)file.Size));
+            var buffer = new byte[128 * 1024];
+            long totalLido = 0;
+            var ultimoPercentualNotificado = -1;
+
+            while (true)
             {
-                try
-                {
-                    var extensao = Path.GetExtension(file.Name);
-                    if (string.IsNullOrWhiteSpace(extensao) || !TiposPermitidos.TryGetValue(extensao, out var contentTypeEsperado))
-                    {
-                        falhas.Add($"{file.Name}: formato não permitido");
-                        continue;
-                    }
-                    if (file.Size <= 0) { falhas.Add($"{file.Name}: arquivo vazio"); continue; }
-                    if (file.Size > maxPorArquivo) { falhas.Add($"{file.Name}: ultrapassa 10 MB"); continue; }
+                var lidos = await stream.ReadAsync(buffer);
+                if (lidos == 0)
+                    break;
 
-                    await using var stream = file.OpenReadStream(maxAllowedSize: maxPorArquivo);
-                    using var ms = new MemoryStream(capacity: checked((int)file.Size));
-                    await stream.CopyToAsync(ms);
-                    var conteudo = ms.ToArray();
-                    if (conteudo.LongLength != file.Size)
-                    {
-                        falhas.Add($"{file.Name}: leitura incompleta ({conteudo.LongLength} de {file.Size} bytes)");
-                        continue;
-                    }
+                await ms.WriteAsync(buffer.AsMemory(0, lidos));
+                totalLido += lidos;
+                var percentual = (int)Math.Min(99, totalLido * 100 / file.Size);
 
-                    arquivosSelecionados.Add(new ArquivoSelecionado
-                    {
-                        Nome = Path.GetFileName(file.Name),
-                        ContentType = contentTypeEsperado,
-                        Conteudo = conteudo
-                    });
-                    adicionados++;
-                }
-                catch (Exception ex)
+                // Atualiza a tela em intervalos de 5%, evitando centenas de
+                // renderizações que tornavam o upload muito lento.
+                if (percentual >= ultimoPercentualNotificado + 5)
                 {
-                    falhas.Add($"{file.Name}: {ex.Message}");
+                    ultimoPercentualNotificado = percentual;
+                    status.Progresso = percentual;
+                    await InvokeAsync(StateHasChanged);
                 }
             }
 
-            mensagemArquivos = falhas.Count == 0
-                ? $"{adicionados} arquivo(s) importado(s) e adicionado(s) ao acordo. Agora clique em Salvar acordo."
-                : $"{adicionados} de {arquivosDaSelecao.Length} arquivo(s) importado(s). Não importados: {string.Join("; ", falhas)}";
+            var conteudo = ms.ToArray();
+            if (conteudo.LongLength != file.Size)
+                return Falhar(status, $"Leitura incompleta: {conteudo.LongLength} de {file.Size} bytes.");
+
+            status.Progresso = 100;
+            status.Concluido = true;
+            await InvokeAsync(StateHasChanged);
+
+            return (new ArquivoSelecionado
+            {
+                Nome = Path.GetFileName(file.Name),
+                ContentType = contentTypeEsperado,
+                Conteudo = conteudo
+            }, null);
+        }
+        catch (Exception ex)
+        {
+            return Falhar(status, ex.Message);
         }
         finally
         {
-            arquivosPendentes = Array.Empty<IBrowserFile>();
-            inputFileKey++;
-            processandoArquivos = false;
+            limiteParalelo.Release();
         }
+    }
+
+    private (ArquivoSelecionado? Arquivo, string? Erro) Falhar(UploadArquivoStatus status, string erro)
+    {
+        status.Falhou = true;
+        status.Erro = erro;
+        status.Progresso = 100;
+        _ = InvokeAsync(StateHasChanged);
+        return (null, $"{status.Nome}: {erro}");
     }
 
     private async Task ExibirArquivoExistente(int id)
@@ -430,11 +493,6 @@ else
     private async Task Salvar()
     {
         erroFinanceiro = null;
-        if (arquivosPendentes.Count > 0)
-        {
-            mensagemArquivos = "Existem arquivos selecionados que ainda não foram importados. Clique em Importar arquivos antes de salvar.";
-            return;
-        }
         if (!IsEdit)
         {
             if (modelo.ValorEntrada < 0 || modelo.ValorEntrada >= modelo.ValorTotal)
