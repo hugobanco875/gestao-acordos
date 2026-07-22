@@ -3,54 +3,108 @@
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
 @using GestaoAcordos.Data
+@using GestaoAcordos.Services
 
 @inject UserManager<ApplicationUser> UserManager
 @inject IUserStore<ApplicationUser> UserStore
 @inject SignInManager<ApplicationUser> SignInManager
 @inject ILogger<Register> Logger
-@inject NavigationManager NavigationManager
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject AdministradorService AdministradorSvc
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Criar conta</PageTitle>
+<PageTitle>@(_primeiroUsuario ? "Configurar primeiro acesso" : "Novo usuário")</PageTitle>
 
-<div class="row justify-content-center">
-    <div class="col-md-6 col-lg-5">
-        <h1 class="h3 mb-3 text-center"><i class="bi bi-person-plus"></i> Criar conta</h1>
-        <StatusMessage Message="@Message" />
-        <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="nome@exemplo.com" />
-                <label for="Input.Email">E-mail</label>
-                <ValidationMessage For="() => Input.Email" class="text-danger" />
+<div class="user-create-page">
+    <div class="user-create-shell">
+        <div class="user-create-header">
+            <div class="user-create-icon" aria-hidden="true">
+                <i class="bi bi-person-plus-fill"></i>
             </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="senha" />
-                <label for="Input.Password">Senha</label>
-                <ValidationMessage For="() => Input.Password" class="text-danger" />
+            <div>
+                <span class="user-create-eyebrow">@(_primeiroUsuario ? "Primeiro acesso" : "Administração")</span>
+                <h1>@(_primeiroUsuario ? "Configurar administrador inicial" : "Criar novo usuário")</h1>
+                <p>@(_primeiroUsuario
+                    ? "Cadastre a primeira conta responsável pela administração do sistema."
+                    : "Adicione uma nova pessoa e defina se ela terá acesso administrativo.")</p>
             </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="repita a senha" />
-                <label for="Input.ConfirmPassword">Confirmar senha</label>
-                <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
-            </div>
-            <div class="form-check mb-3">
-                <InputCheckbox @bind-Value="Input.SolicitarAdministrador" id="Input.SolicitarAdministrador" class="form-check-input" />
-                <label class="form-check-label" for="Input.SolicitarAdministrador">Solicitar perfil de administrador</label>
-                <div class="form-text">A permissão só será liberada após autorização de outro administrador.</div>
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Criar conta</button>
-            <div class="mt-3 text-center">
-                <a href="Account/Login">Já tenho conta — entrar</a>
-            </div>
-        </EditForm>
+        </div>
+
+        <div class="user-create-card">
+            @if (_primeiroUsuario)
+            {
+                <div class="alert alert-info d-flex gap-2 align-items-start" role="alert">
+                    <i class="bi bi-info-circle-fill mt-1"></i>
+                    <div>Este é o primeiro acesso. A conta criada será o administrador inicial do sistema.</div>
+                </div>
+            }
+
+            <StatusMessage Message="@Message" />
+
+            <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger validation-summary" role="alert" />
+
+                <div class="form-section">
+                    <div class="form-section-title">
+                        <i class="bi bi-person-vcard"></i>
+                        <span>Dados de acesso</span>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-floating form-grid-full">
+                            <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="nome@exemplo.com" />
+                            <label for="Input.Email">E-mail</label>
+                            <ValidationMessage For="() => Input.Email" class="text-danger field-validation" />
+                        </div>
+
+                        <div class="form-floating">
+                            <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="senha" />
+                            <label for="Input.Password">Senha</label>
+                            <ValidationMessage For="() => Input.Password" class="text-danger field-validation" />
+                        </div>
+
+                        <div class="form-floating">
+                            <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="repita a senha" />
+                            <label for="Input.ConfirmPassword">Confirmar senha</label>
+                            <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger field-validation" />
+                        </div>
+                    </div>
+                </div>
+
+                @if (!_primeiroUsuario)
+                {
+                    <div class="permission-card">
+                        <div class="form-check form-switch m-0">
+                            <InputCheckbox @bind-Value="Input.Administrador" id="Input.Administrador" class="form-check-input" role="switch" />
+                            <label class="form-check-label" for="Input.Administrador">
+                                <strong>Usuário administrador</strong>
+                                <span>Permite gerenciar usuários, configurações, gerar backups e restaurar dados.</span>
+                            </label>
+                        </div>
+                    </div>
+                }
+
+                <div class="user-create-actions">
+                    <a class="btn btn-outline-secondary" href="@(_primeiroUsuario ? "Account/Login" : "usuarios")">
+                        <i class="bi bi-arrow-left"></i>
+                        <span>@(_primeiroUsuario ? "Voltar ao login" : "Cancelar")</span>
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg"></i>
+                        <span>@(_primeiroUsuario ? "Criar administrador inicial" : "Criar usuário")</span>
+                    </button>
+                </div>
+            </EditForm>
+        </div>
     </div>
 </div>
 
 @code {
     private IEnumerable<IdentityError>? identityErrors;
+    private bool _primeiroUsuario;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
     private InputModel Input { get; set; } = new();
@@ -58,17 +112,44 @@
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
 
-    private string? Message => identityErrors is null ? null : $"Erro: {string.Join(", ", identityErrors.Select(error => error.Description))}";
+    private string? Message => identityErrors is null
+        ? null
+        : $"Erro: {string.Join(", ", identityErrors.Select(error => error.Description))}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _primeiroUsuario = !await AdministradorSvc.ExisteUsuarioAsync();
+
+        if (!_primeiroUsuario && !await AdministradorSvc.EhAdministradorAtivoAsync(HttpContext.User))
+        {
+            RedirectManager.RedirectTo("Account/AccessDenied");
+        }
+    }
 
     public async Task RegisterUser(EditContext editContext)
     {
+        // Revalida no servidor para impedir cadastro por acesso direto ou corrida entre requisições.
+        var primeiroUsuarioAgora = !await AdministradorSvc.ExisteUsuarioAsync();
+        var administradorCriador = primeiroUsuarioAgora
+            ? null
+            : await AdministradorSvc.ObterAdministradorAtivoAsync(HttpContext.User);
+
+        if (!primeiroUsuarioAgora && administradorCriador is null)
+        {
+            RedirectManager.RedirectTo("Account/AccessDenied");
+        }
+
         var user = CreateUser();
-        await using var db = await DbFactory.CreateDbContextAsync();
-        var primeiroUsuario = !await db.Users.AnyAsync();
         user.Ativo = true;
-        user.Administrador = primeiroUsuario;
-        user.SolicitouAdministrador = !primeiroUsuario && Input.SolicitarAdministrador;
+        user.Administrador = primeiroUsuarioAgora || Input.Administrador;
+        user.SolicitouAdministrador = false;
         user.CriadoEm = DateTime.Now;
+        user.AdministradorAutorizadorId = !primeiroUsuarioAgora && user.Administrador
+            ? administradorCriador!.Id
+            : null;
+        user.AdministradorAutorizadoEm = !primeiroUsuarioAgora && user.Administrador
+            ? DateTime.Now
+            : null;
 
         await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
         var emailStore = GetEmailStore();
@@ -82,8 +163,14 @@
         }
 
         Logger.LogInformation("Nova conta criada com senha.");
-        await SignInManager.SignInAsync(user, isPersistent: false);
-        RedirectManager.RedirectTo(ReturnUrl);
+
+        if (primeiroUsuarioAgora)
+        {
+            await SignInManager.SignInAsync(user, isPersistent: false);
+            RedirectManager.RedirectTo(ReturnUrl);
+        }
+
+        RedirectManager.RedirectTo("usuarios");
     }
 
     private ApplicationUser CreateUser()
@@ -104,6 +191,7 @@
         {
             throw new NotSupportedException("O store de usuários precisa dar suporte a e-mail.");
         }
+
         return (IUserEmailStore<ApplicationUser>)UserStore;
     }
 
@@ -122,6 +210,6 @@
         [Compare("Password", ErrorMessage = "As senhas não coincidem.")]
         public string ConfirmPassword { get; set; } = "";
 
-        public bool SolicitarAdministrador { get; set; }
+        public bool Administrador { get; set; }
     }
 }

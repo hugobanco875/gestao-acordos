@@ -76,6 +76,11 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
         options.Password.RequireLowercase = false;
         options.Password.RequireDigit = false;
         options.Password.RequiredLength = 6;
+
+        // Proteção contra força bruta: bloqueia por 15 minutos após 5 falhas.
+        options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     })
     .AddErrorDescriber<PtBrIdentityErrorDescriber>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -84,6 +89,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
+builder.Services.AddScoped<AdministradorService>();
 builder.Services.AddScoped<RelatorioService>();
 builder.Services.AddScoped<BackupService>();
 builder.Services.AddScoped<ConfiguracaoService>();

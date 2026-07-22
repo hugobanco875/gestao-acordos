@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Security.Claims;
 using GestaoAcordos.Data;
 using GestaoAcordos.Models;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +20,9 @@ public class BackupData
     public List<Evento> Eventos { get; set; } = new();
 }
 
-public class BackupService(IDbContextFactory<ApplicationDbContext> factory)
+public class BackupService(
+    IDbContextFactory<ApplicationDbContext> factory,
+    AdministradorService administradorService)
 {
     private static readonly JsonSerializerOptions _json = new()
     {
@@ -27,9 +30,19 @@ public class BackupService(IDbContextFactory<ApplicationDbContext> factory)
         WriteIndented = false
     };
 
-    /// <summary>Gera um backup completo (JSON em bytes). Os PDFs vão embutidos em base64.</summary>
-    public async Task<byte[]> ExportarAsync()
+    private async Task GarantirAdministradorAsync(ClaimsPrincipal principal)
     {
+        if (!await administradorService.EhAdministradorAtivoAsync(principal))
+        {
+            throw new UnauthorizedAccessException(
+                "Somente usuários administradores ativos podem gerar ou restaurar backups.");
+        }
+    }
+
+    /// <summary>Gera um backup completo (JSON em bytes). Os PDFs vão embutidos em base64.</summary>
+    public async Task<byte[]> ExportarAsync(ClaimsPrincipal principal)
+    {
+        await GarantirAdministradorAsync(principal);
         await using var db = await factory.CreateDbContextAsync();
         var data = new BackupData
         {
@@ -49,8 +62,9 @@ public class BackupService(IDbContextFactory<ApplicationDbContext> factory)
     /// Restaura um backup: APAGA os dados atuais (empresas/clientes/acordos/parcelas/eventos/PDFs)
     /// e reinsere os do arquivo. Os IDs são regerados e as ligações (FKs) remapeadas.
     /// </summary>
-    public async Task<string> RestaurarAsync(byte[] jsonBytes)
+    public async Task<string> RestaurarAsync(byte[] jsonBytes, ClaimsPrincipal principal)
     {
+        await GarantirAdministradorAsync(principal);
         var data = JsonSerializer.Deserialize<BackupData>(jsonBytes, _json)
                    ?? throw new InvalidOperationException("Arquivo de backup inválido.");
 

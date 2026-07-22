@@ -1,8 +1,8 @@
 @page "/usuarios"
 @attribute [Authorize]
 @inject IDbContextFactory<ApplicationDbContext> ContextFactory
-@inject UserManager<ApplicationUser> AppUserManager
 @inject AuthenticationStateProvider AuthStateProvider
+@inject GestaoAcordos.Services.AdministradorService AdministradorSvc
 
 <PageTitle>Usuários</PageTitle>
 
@@ -26,7 +26,12 @@ else
             <h1>Usuários</h1>
             <p>Controle de acesso, situação e permissões administrativas.</p>
         </div>
-        <span class="badge rounded-pill text-bg-light border px-3 py-2">@_usuarios.Count usuário(s)</span>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <a class="btn btn-primary" href="Account/Register">
+                <i class="bi bi-person-plus me-1"></i>Novo usuário
+            </a>
+            <span class="badge rounded-pill text-bg-light border px-3 py-2">@_usuarios.Count usuário(s)</span>
+        </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_mensagem))
@@ -179,9 +184,9 @@ else
         try
         {
             var authenticationState = await AuthStateProvider.GetAuthenticationStateAsync();
-            var usuarioAtual = await AppUserManager.GetUserAsync(authenticationState.User);
+            var usuarioAtual = await AdministradorSvc.ObterAdministradorAtivoAsync(authenticationState.User);
 
-            _autorizado = usuarioAtual is not null && usuarioAtual.Ativo && usuarioAtual.Administrador;
+            _autorizado = usuarioAtual is not null;
             _usuarioAtualId = usuarioAtual?.Id ?? string.Empty;
 
             if (_autorizado)
@@ -299,6 +304,15 @@ else
 
     private async Task ExecutarAlteracaoAsync(Func<GestaoAcordos.Data.ApplicationDbContext, Task<string>> alteracao)
     {
+        var authenticationState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var administradorAtual = await AdministradorSvc.ObterAdministradorAtivoAsync(authenticationState.User);
+        if (administradorAtual is null || administradorAtual.Id != _usuarioAtualId)
+        {
+            _autorizado = false;
+            DefinirErro("Sua autorização administrativa não está mais ativa.");
+            return;
+        }
+
         if (_processando)
         {
             return;
