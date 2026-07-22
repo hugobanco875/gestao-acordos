@@ -51,5 +51,5 @@
 @media (max-width:767.98px) {
     .brand-mark { width:44px; height:44px; flex-basis:44px; border-radius:13px; }
     .brand-mark img { border-radius:12px; }
-    .brand strong { font-size:.86rem; -webkit-line-clamp:1; line-clamp:1; }
+    .brand strong { font-size:.82rem; -webkit-line-clamp:2; line-clamp:2; }
 }
