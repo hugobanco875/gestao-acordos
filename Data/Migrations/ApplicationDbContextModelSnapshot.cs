@@ -246,6 +246,19 @@ namespace GestaoAcordos.Data.Migrations
                         .HasMaxLength(60)
                         .HasColumnType("character varying(60)");
 
+                    b.Property<string>("LogoDataUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SubtituloSistema")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Tema")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
                     b.HasKey("Id");
 
                     b.ToTable("Configuracoes");

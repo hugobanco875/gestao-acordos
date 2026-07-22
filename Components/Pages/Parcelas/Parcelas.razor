@@ -2,7 +2,6 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
-@inject IJSRuntime JS
 
 <PageTitle>Baixa de Parcelas</PageTitle>
 
@@ -25,7 +24,7 @@
                 <label class="form-label small mb-1">Cliente</label>
                 <select class="form-select form-select-sm" @bind="filtroClienteId">
                     <option value="0">Todos</option>
-                    @foreach (var c in clientes.Where(c => filtroEmpresaId == 0 || c.EmpresaId == filtroEmpresaId))
+                    @foreach (var c in clientes.Where(c => filtroEmpresaId == 0 || c.ClienteEmpresas.Any(ce => ce.EmpresaId == filtroEmpresaId)))
                     {
                         <option value="@c.Id">@c.Nome</option>
                     }
@@ -82,10 +81,11 @@ else
                         <th class="d-none d-md-table-cell">Empresa</th>
                         <th>Cliente</th>
                         <th class="d-none d-lg-table-cell">Processo</th>
-                        <th class="text-center">Parc.</th>
+                        <th>Movimento</th>
                         <th>Vencimento</th>
                         <th class="text-end">Valor</th>
                         <th>Status</th>
+                        <th>Forma</th>
                         <th>Baixar em</th>
                         <th class="text-end">Ação</th>
                     </tr>
@@ -94,12 +94,12 @@ else
                     @foreach (var p in parcelas)
                     {
                         <tr class="@LinhaClasse(p)">
-                            <td class="d-none d-md-table-cell">@p.Acordo?.Cliente?.Empresa?.Nome</td>
+                            <td class="d-none d-md-table-cell">@p.Acordo?.Empresa?.Nome</td>
                             <td>
                                 <a href="acordos/@p.AcordoId">@p.Acordo?.Cliente?.Nome</a>
                             </td>
                             <td class="d-none d-lg-table-cell">@p.Acordo?.NumeroProcesso</td>
-                            <td class="text-center">@p.Numero</td>
+                            <td><span class="badge @(p.Tipo == TipoMovimentoFinanceiro.Entrada ? "bg-primary" : "bg-secondary")">@p.DescricaoMovimento</span></td>
                             <td>@p.DataVencimento.ToString("dd/MM/yyyy")</td>
                             <td class="text-end">@p.Valor.ToString("C")</td>
                             <td>
@@ -117,6 +117,16 @@ else
                                 }
                             </td>
                             <td>
+                                @if (p.Paga)
+                                {
+                                    <span>@NomeForma(p.FormaPagamento)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td>
                                 @if (!p.Paga && datasBaixa.ContainsKey(p.Id))
                                 {
                                     <input type="date" class="form-control form-control-sm" style="max-width:150px"
@@ -127,11 +137,11 @@ else
                             <td class="text-end text-nowrap">
                                 @if (p.Paga)
                                 {
-                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => Estornar(p)"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => SolicitarConfirmacao(p, true)"><i class="bi bi-arrow-counterclockwise"></i></button>
                                 }
                                 else
                                 {
-                                    <button class="btn btn-sm btn-success" @onclick="() => Baixar(p)"><i class="bi bi-check-lg"></i> Baixar</button>
+                                    <button class="btn btn-sm btn-success" @onclick="() => SolicitarConfirmacao(p, false)"><i class="bi bi-check-lg"></i> Baixar</button>
                                 }
                             </td>
                         </tr>
@@ -140,6 +150,63 @@ else
             </table>
         </div>
     }
+}
+
+
+@if (parcelaConfirmacao is not null)
+{
+    <div class="modal show d-block" tabindex="-1" style="background:rgba(15,23,42,.55);backdrop-filter:blur(3px)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(confirmandoEstorno ? "Confirmar estorno" : "Confirmar baixa")</h5>
+                    <button type="button" class="btn-close" @onclick="CancelarConfirmacao"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">@(confirmandoEstorno
+                        ? "Deseja realmente estornar a baixa desta parcela? Ela voltará a ficar em aberto."
+                        : "Deseja realmente baixar esta parcela como paga?")</p>
+                    <div class="rounded-3 bg-body-tertiary p-3 small">
+                        <div><strong>Cliente:</strong> @parcelaConfirmacao.Acordo?.Cliente?.Nome</div>
+                        <div><strong>Movimento:</strong> @parcelaConfirmacao.DescricaoMovimento</div>
+                        <div><strong>Valor:</strong> @parcelaConfirmacao.Valor.ToString("C")</div>
+                        @if (!confirmandoEstorno)
+                        {
+                            <div><strong>Data da baixa:</strong> @(datasBaixa.TryGetValue(parcelaConfirmacao.Id, out var dt) ? dt.ToString("dd/MM/yyyy") : hoje.ToString("dd/MM/yyyy"))</div>
+                        }
+                        else
+                        {
+                            <div><strong>Forma registrada:</strong> @NomeForma(parcelaConfirmacao.FormaPagamento)</div>
+                        }
+                    </div>
+
+                    @if (!confirmandoEstorno)
+                    {
+                        <div class="mt-3">
+                            <label class="form-label">Forma de pagamento</label>
+                            <select class="form-select" @bind="formaPagamentoConfirmacao">
+                                @foreach (var forma in FormasPagamento.OpcoesRecebimento)
+                                {
+                                    <option value="@forma">@FormasPagamento.RotuloSelecao(forma)</option>
+                                }
+                            </select>
+                            @if (formaPagamentoConfirmacao == FormaPagamento.NaoInformada)
+                            {
+                                <div class="form-text text-warning">Selecione a forma utilizada para manter o relatório financeiro completo.</div>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelarConfirmacao">Não, cancelar</button>
+                    <button type="button" class="btn @(confirmandoEstorno ? "btn-warning" : "btn-success")" @onclick="ConfirmarAcao">
+                        <i class="bi @(confirmandoEstorno ? "bi-arrow-counterclockwise" : "bi-check-lg")"></i>
+                        Sim, @(confirmandoEstorno ? "estornar" : "baixar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
@@ -160,7 +227,10 @@ else
     {
         using var db = await DbFactory.CreateDbContextAsync();
         empresas = await db.Empresas.OrderBy(e => e.Nome).ToListAsync();
-        clientes = await db.Clientes.OrderBy(c => c.Nome).ToListAsync();
+        clientes = await db.Clientes
+            .Include(c => c.ClienteEmpresas)
+            .OrderBy(c => c.Nome)
+            .ToListAsync();
         await Carregar();
     }
 
@@ -174,11 +244,12 @@ else
     {
         using var db = await DbFactory.CreateDbContextAsync();
         var q = db.Parcelas
-            .Include(p => p.Acordo)!.ThenInclude(a => a!.Cliente)!.ThenInclude(c => c!.Empresa)
+            .Include(p => p.Acordo)!.ThenInclude(a => a!.Cliente)
+            .Include(p => p.Acordo)!.ThenInclude(a => a!.Empresa)
             .AsQueryable();
 
         if (filtroEmpresaId > 0)
-            q = q.Where(p => p.Acordo!.Cliente!.EmpresaId == filtroEmpresaId);
+            q = q.Where(p => p.Acordo!.EmpresaId == filtroEmpresaId);
         if (filtroClienteId > 0)
             q = q.Where(p => p.Acordo!.ClienteId == filtroClienteId);
 
@@ -212,31 +283,53 @@ else
             datasBaixa[parcelaId] = d;
     }
 
-    private async Task Baixar(Parcela p)
+    private Parcela? parcelaConfirmacao;
+    private bool confirmandoEstorno;
+    private FormaPagamento formaPagamentoConfirmacao = FormaPagamento.Pix;
+
+    private void SolicitarConfirmacao(Parcela p, bool estorno)
     {
-        var data = datasBaixa.TryGetValue(p.Id, out var d) ? d : hoje;
+        parcelaConfirmacao = p;
+        confirmandoEstorno = estorno;
+        formaPagamentoConfirmacao = p.FormaPagamento == FormaPagamento.NaoInformada
+            ? FormaPagamento.Pix
+            : p.FormaPagamento;
+    }
+
+    private void CancelarConfirmacao()
+    {
+        parcelaConfirmacao = null;
+        confirmandoEstorno = false;
+    }
+
+    private async Task ConfirmarAcao()
+    {
+        if (parcelaConfirmacao is null) return;
+        var id = parcelaConfirmacao.Id;
+        var data = datasBaixa.TryGetValue(id, out var d) ? d : hoje;
         using var db = await DbFactory.CreateDbContextAsync();
-        var parcela = await db.Parcelas.FirstOrDefaultAsync(x => x.Id == p.Id);
-        if (parcela is null) return;
-        parcela.Paga = true;
-        parcela.DataPagamento = data;
-        parcela.ValorPago = parcela.Valor;
+        var parcela = await db.Parcelas.FirstOrDefaultAsync(x => x.Id == id);
+        if (parcela is null) { CancelarConfirmacao(); return; }
+
+        if (confirmandoEstorno)
+        {
+            parcela.Paga = false;
+            parcela.DataPagamento = null;
+            parcela.ValorPago = null;
+            parcela.FormaPagamento = FormaPagamento.NaoInformada;
+        }
+        else
+        {
+            parcela.Paga = true;
+            parcela.DataPagamento = data;
+            parcela.ValorPago = parcela.Valor;
+            parcela.FormaPagamento = formaPagamentoConfirmacao;
+        }
+
         await db.SaveChangesAsync();
+        CancelarConfirmacao();
         await Carregar();
     }
 
-    private async Task Estornar(Parcela p)
-    {
-        if (!await JS.InvokeAsync<bool>("confirm", "Estornar a baixa desta parcela?"))
-            return;
-
-        using var db = await DbFactory.CreateDbContextAsync();
-        var parcela = await db.Parcelas.FirstOrDefaultAsync(x => x.Id == p.Id);
-        if (parcela is null) return;
-        parcela.Paga = false;
-        parcela.DataPagamento = null;
-        parcela.ValorPago = null;
-        await db.SaveChangesAsync();
-        await Carregar();
-    }
+    private static string NomeForma(FormaPagamento forma) => FormasPagamento.Nome(forma);
 }

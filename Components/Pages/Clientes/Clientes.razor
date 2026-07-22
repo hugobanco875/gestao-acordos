@@ -46,7 +46,7 @@ else
                 <thead>
                     <tr>
                         <th>Nome</th>
-                        <th class="d-none d-md-table-cell">Empresa</th>
+                        <th class="d-none d-md-table-cell">Empresas</th>
                         <th class="d-none d-md-table-cell">Telefone</th>
                         <th class="text-center">Acordos</th>
                         <th class="text-end">Ações</th>
@@ -57,7 +57,7 @@ else
                     {
                         <tr>
                             <td>@c.Nome</td>
-                            <td class="d-none d-md-table-cell">@c.Empresa?.Nome</td>
+                            <td class="d-none d-md-table-cell">@NomesEmpresas(c)</td>
                             <td class="d-none d-md-table-cell">@c.Telefone</td>
                             <td class="text-center">@c.Acordos.Count</td>
                             <td class="text-end text-nowrap">
@@ -86,15 +86,23 @@ else
                     </div>
                     <div class="modal-body">
                         <div class="mb-3">
-                            <label class="form-label">Empresa *</label>
-                            <InputSelect class="form-select" @bind-Value="modelo.EmpresaId">
-                                <option value="0">Selecione...</option>
+                            <label class="form-label">Empresas *</label>
+                            <div class="border rounded-3 p-2 empresa-multi-list">
                                 @foreach (var e in empresas!)
                                 {
-                                    <option value="@e.Id">@e.Nome</option>
+                                    <div class="form-check py-1">
+                                        <input class="form-check-input" type="checkbox" id="empresa-@e.Id"
+                                               checked="@empresasSelecionadas.Contains(e.Id)"
+                                               @onchange="args => AlternarEmpresa(e.Id, args.Value)" />
+                                        <label class="form-check-label" for="empresa-@e.Id">@e.Nome</label>
+                                    </div>
                                 }
-                            </InputSelect>
-                            <ValidationMessage For="() => modelo.EmpresaId" />
+                            </div>
+                            <div class="form-text">Selecione uma ou mais empresas às quais este cliente pertence.</div>
+                            @if (!string.IsNullOrEmpty(empresaMsg))
+                            {
+                                <div class="text-danger small mt-1">@empresaMsg</div>
+                            }
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Nome *</label>
@@ -104,7 +112,7 @@ else
                         <div class="row g-2">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">CPF/CNPJ</label>
-                                <InputText class="form-control" @bind-Value="modelo.CpfCnpj" />
+                                <InputText class="form-control" @bind-Value="modelo.CpfCnpj" placeholder="000.000.000-00 ou 00.000.000/0000-00" data-mask="cpf-cnpj" inputmode="numeric" maxlength="18" autocomplete="off" />
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Telefone</label>
@@ -122,7 +130,7 @@ else
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">CEP</label>
                                 <div class="input-group">
-                                    <InputText class="form-control" @bind-Value="modelo.Cep" placeholder="00000-000" />
+                                    <InputText class="form-control" @bind-Value="modelo.Cep" placeholder="00000-000" data-mask="cep" inputmode="numeric" maxlength="9" autocomplete="postal-code" />
                                     <button type="button" class="btn btn-outline-secondary" @onclick="BuscarCep" disabled="@buscandoCep" title="Buscar endereço pelo CEP">
                                         @if (buscandoCep)
                                         {
@@ -192,6 +200,8 @@ else
     private string busca = "";
     private bool buscandoCep;
     private string? cepMsg;
+    private HashSet<int> empresasSelecionadas = new();
+    private string? empresaMsg;
 
     protected override async Task OnInitializedAsync() => await Carregar();
 
@@ -201,6 +211,7 @@ else
         empresas = await db.Empresas.Where(e => e.Ativo).OrderBy(e => e.Nome).ToListAsync();
         clientes = await db.Clientes
             .Include(c => c.Empresa)
+            .Include(c => c.ClienteEmpresas).ThenInclude(ce => ce.Empresa)
             .Include(c => c.Acordos)
             .OrderBy(c => c.Nome)
             .ToListAsync();
@@ -209,6 +220,8 @@ else
     private void Novo()
     {
         modelo = new Cliente();
+        empresasSelecionadas = new();
+        empresaMsg = null;
         cepMsg = null;
         editando = true;
     }
@@ -233,11 +246,34 @@ else
             Observacoes = c.Observacoes,
             CriadoEm = c.CriadoEm
         };
+        empresasSelecionadas = c.ClienteEmpresas.Count > 0
+            ? c.ClienteEmpresas.Select(x => x.EmpresaId).ToHashSet()
+            : new HashSet<int> { c.EmpresaId };
+        empresaMsg = null;
         cepMsg = null;
         editando = true;
     }
 
     private void Cancelar() => editando = false;
+
+    private void AlternarEmpresa(int empresaId, object? value)
+    {
+        var marcado = value is bool b && b;
+        if (marcado) empresasSelecionadas.Add(empresaId);
+        else empresasSelecionadas.Remove(empresaId);
+        empresaMsg = null;
+    }
+
+    private static string NomesEmpresas(Cliente c)
+    {
+        var nomes = c.ClienteEmpresas
+            .Where(x => x.Empresa is not null)
+            .Select(x => x.Empresa!.Nome)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToList();
+        return nomes.Count > 0 ? string.Join(", ", nomes) : c.Empresa?.Nome ?? "—";
+    }
 
     private async Task BuscarCep()
     {
@@ -264,11 +300,45 @@ else
 
     private async Task Salvar()
     {
+        if (empresasSelecionadas.Count == 0)
+        {
+            empresaMsg = "Selecione pelo menos uma empresa.";
+            return;
+        }
+
         using var db = await DbFactory.CreateDbContextAsync();
+        Cliente entidade;
         if (modelo.Id == 0)
-            db.Clientes.Add(modelo);
+        {
+            entidade = modelo;
+            entidade.EmpresaId = empresasSelecionadas.OrderBy(x => x).First();
+            db.Clientes.Add(entidade);
+            await db.SaveChangesAsync();
+        }
         else
-            db.Clientes.Update(modelo);
+        {
+            entidade = await db.Clientes.FirstAsync(x => x.Id == modelo.Id);
+            entidade.EmpresaId = empresasSelecionadas.Contains(modelo.EmpresaId)
+                ? modelo.EmpresaId
+                : empresasSelecionadas.OrderBy(x => x).First();
+            entidade.Nome = modelo.Nome;
+            entidade.CpfCnpj = modelo.CpfCnpj;
+            entidade.Telefone = modelo.Telefone;
+            entidade.Email = modelo.Email;
+            entidade.Cep = modelo.Cep;
+            entidade.Logradouro = modelo.Logradouro;
+            entidade.Numero = modelo.Numero;
+            entidade.Complemento = modelo.Complemento;
+            entidade.Bairro = modelo.Bairro;
+            entidade.Cidade = modelo.Cidade;
+            entidade.Uf = modelo.Uf;
+            entidade.Observacoes = modelo.Observacoes;
+            await db.ClienteEmpresas.Where(x => x.ClienteId == entidade.Id).ExecuteDeleteAsync();
+        }
+
+        foreach (var empresaId in empresasSelecionadas)
+            db.ClienteEmpresas.Add(new ClienteEmpresa { ClienteId = entidade.Id, EmpresaId = empresaId });
+
         await db.SaveChangesAsync();
         editando = false;
         await Carregar();
@@ -285,3 +355,7 @@ else
         await Carregar();
     }
 }
+
+<style>
+.empresa-multi-list{max-height:180px;overflow:auto;background:var(--bs-body-bg);}
+</style>

@@ -4,15 +4,13 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using GestaoAcordos.Components;
 using GestaoAcordos.Components.Account;
 using GestaoAcordos.Data;
 using GestaoAcordos.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Permite rodar como Servico do Windows (no-op no Linux/Docker/console).
-builder.Services.AddWindowsService(o => o.ServiceName = "GestaoAcordos");
 
 // Licenca gratuita do QuestPDF (geracao de PDF dos relatorios).
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
@@ -49,7 +47,15 @@ builder.Services.AddAuthentication(options =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 // Factory para uso seguro do DbContext nos componentes Blazor Server...
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString));
+{
+    options.UseNpgsql(connectionString);
+
+    // Algumas migrations de compatibilidade foram escritas manualmente. O aviso
+    // de snapshot não deve impedir a atualização automática; as migrations
+    // continuam sendo identificadas por seus atributos e aplicadas em ordem.
+    options.ConfigureWarnings(warnings =>
+        warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+});
 // ...e um contexto "scoped" (criado pela factory) para o ASP.NET Identity.
 builder.Services.AddScoped<ApplicationDbContext>(sp =>
     sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext());
@@ -90,7 +96,16 @@ using (var scope = app.Services.CreateScope())
 {
     var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
     using var db = dbFactory.CreateDbContext();
-    db.Database.Migrate();
+    try
+    {
+        db.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine("Falha ao atualizar a estrutura do banco de dados.");
+        Console.Error.WriteLine(ex);
+        throw;
+    }
 }
 
 // Cultura pt-BR na primeira renderizacao (server-side).

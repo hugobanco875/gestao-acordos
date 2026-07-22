@@ -26,6 +26,9 @@ public class ConfiguracaoService(IDbContextFactory<ApplicationDbContext> factory
         else
         {
             atual.NomeSistema = cfg.NomeSistema;
+            atual.LogoDataUrl = cfg.LogoDataUrl;
+            atual.SubtituloSistema = cfg.SubtituloSistema;
+            atual.Tema = cfg.Tema;
             atual.CorPrimaria = cfg.CorPrimaria;
             atual.CorMenu = cfg.CorMenu;
         }

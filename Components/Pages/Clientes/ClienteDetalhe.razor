@@ -16,7 +16,7 @@ else
         <a href="clientes" class="btn btn-sm btn-link px-0"><i class="bi bi-arrow-left"></i> Voltar para clientes</a>
         <h1 class="h3 mb-1"><i class="bi bi-person"></i> @cliente.Nome</h1>
         <div class="text-muted small">
-            <span class="me-3"><i class="bi bi-building"></i> @cliente.Empresa?.Nome</span>
+            <span class="me-3"><i class="bi bi-building"></i> @NomesEmpresas</span>
             @if (!string.IsNullOrWhiteSpace(cliente.CpfCnpj))
             {
                 <span class="me-3"><i class="bi bi-person-vcard"></i> @cliente.CpfCnpj</span>
@@ -62,6 +62,8 @@ else
                             }
                             <div class="mt-1 d-flex flex-wrap gap-1">
                                 <span class="badge bg-primary">Total @a.ValorTotal.ToString("C")</span>
+                                @if (a.ValorEntrada > 0) { <span class="badge bg-success">Entrada @a.ValorEntrada.ToString("C")</span> }
+                                <span class="badge bg-secondary">@a.Empresa?.Nome</span>
                                 <span class="badge @(pagas == a.Parcelas.Count ? "bg-success" : "bg-warning text-dark")">
                                     @pagas/@a.Parcelas.Count parcelas pagas
                                 </span>
@@ -90,6 +92,7 @@ else
 @code {
     [Parameter] public int Id { get; set; }
     private Cliente? cliente;
+    private string NomesEmpresas => cliente is null ? "" : string.Join(", ", cliente.ClienteEmpresas.Where(x => x.Empresa is not null).Select(x => x.Empresa!.Nome).Distinct().OrderBy(x => x));
 
     protected override async Task OnParametersSetAsync() => await Carregar();
 
@@ -98,6 +101,8 @@ else
         using var db = await DbFactory.CreateDbContextAsync();
         cliente = await db.Clientes
             .Include(c => c.Empresa)
+            .Include(c => c.ClienteEmpresas).ThenInclude(ce => ce.Empresa)
+            .Include(c => c.Acordos).ThenInclude(a => a.Empresa)
             .Include(c => c.Acordos).ThenInclude(a => a.Parcelas)
             .FirstOrDefaultAsync(c => c.Id == Id);
     }

@@ -4,78 +4,213 @@
 @inject GestaoAcordos.Services.ConfiguracaoService ConfigSvc
 @inject IJSRuntime JS
 
-<PageTitle>Aparência</PageTitle>
+<PageTitle>Identidade visual</PageTitle>
 
-<h1 class="h3 mb-3"><i class="bi bi-palette"></i> Aparência do sistema</h1>
+<div class="page-heading mb-4">
+    <span class="eyebrow">Personalização</span>
+    <h1 class="h3 mb-1"><i class="bi bi-palette"></i> Identidade visual</h1>
+    <p class="text-muted mb-0">Personalize o nome, a logomarca e as cores exibidas no sistema.</p>
+</div>
 
-<div class="card" style="max-width:680px">
-    <div class="card-body">
-        <EditForm Model="cfg" OnValidSubmit="Salvar">
-            <div class="mb-3">
-                <label class="form-label">Nome do sistema</label>
-                <InputText class="form-control" @bind-Value="cfg.NomeSistema" />
-            </div>
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Cor principal <small class="text-muted">(botões, destaques)</small></label>
-                    <div class="input-group">
-                        <input type="color" class="form-control form-control-color" @bind="cfg.CorPrimaria" />
-                        <InputText class="form-control" @bind-Value="cfg.CorPrimaria" />
+<div class="row g-4 align-items-start">
+    <div class="col-xl-7">
+        <div class="card">
+            <div class="card-body p-4">
+                <EditForm Model="cfg" OnValidSubmit="Salvar">
+                    <DataAnnotationsValidator />
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Nome da empresa ou do sistema</label>
+                        <InputText class="form-control" @bind-Value="cfg.NomeSistema" maxlength="60" placeholder="Ex.: Almeida Advocacia" />
+                        <div class="form-text">Esse nome será exibido ao lado da logomarca no menu principal.</div>
                     </div>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Cor do menu lateral</label>
-                    <div class="input-group">
-                        <input type="color" class="form-control form-control-color" @bind="cfg.CorMenu" />
-                        <InputText class="form-control" @bind-Value="cfg.CorMenu" />
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Descrição abaixo do nome</label>
+                        <InputText class="form-control" @bind-Value="cfg.SubtituloSistema" maxlength="80" placeholder="Ex.: Advocacia especializada" />
+                        <div class="form-text">Texto curto exibido abaixo do nome da empresa.</div>
                     </div>
-                </div>
-            </div>
 
-            <div class="mt-4">
-                <p class="text-muted mb-1">Prévia:</p>
-                <div class="d-flex align-items-center gap-2 p-3 rounded" style="background:@cfg.CorMenu">
-                    <i class="bi bi-briefcase-fill text-white"></i>
-                    <span class="text-white fw-semibold">@cfg.NomeSistema</span>
-                    <button type="button" class="btn btn-sm ms-auto text-white" style="background:@cfg.CorPrimaria; border-color:@cfg.CorPrimaria">Botão exemplo</button>
-                </div>
-            </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Logomarca</label>
+                        <div class="logo-upload-box">
+                            <div class="logo-preview-large">
+                                @if (!string.IsNullOrWhiteSpace(cfg.LogoDataUrl))
+                                {
+                                    <img src="@cfg.LogoDataUrl" alt="Prévia da logomarca" />
+                                }
+                                else
+                                {
+                                    <i class="bi bi-image"></i>
+                                }
+                            </div>
+                            <div class="flex-grow-1">
+                                <InputFile id="logo-upload" class="form-control" OnChange="SelecionarLogo" accept="image/png,image/jpeg,image/webp" />
+                                <div class="form-text">PNG, JPG ou WebP, com até 2 MB. A imagem será ajustada automaticamente ao espaço disponível, sem deformar.</div>
+                                @if (!string.IsNullOrWhiteSpace(erroLogo))
+                                {
+                                    <div class="text-danger small mt-2"><i class="bi bi-exclamation-circle"></i> @erroLogo</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(cfg.LogoDataUrl))
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-danger mt-3" @onclick="RemoverLogo">
+                                        <i class="bi bi-trash3"></i> Remover logomarca
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
 
-            <div class="mt-4 d-flex gap-2">
-                <button type="button" class="btn btn-outline-secondary" @onclick="Restaurar">Restaurar padrão</button>
-                <button type="submit" class="btn btn-primary" disabled="@salvando">
-                    @if (salvando)
-                    {
-                        <span class="spinner-border spinner-border-sm"></span> <text> Aplicando...</text>
-                    }
-                    else
-                    {
-                        <i class="bi bi-check-lg"></i> <text> Salvar e aplicar</text>
-                    }
-                </button>
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Tema do sistema</label>
+                        <InputRadioGroup @bind-Value="cfg.Tema" class="theme-options" aria-label="Tema do sistema">
+                            <label class="theme-option">
+                                <InputRadio Value='@("claro")' />
+                                <span><i class="bi bi-sun"></i><strong>Claro</strong><small>Interface sempre clara</small></span>
+                            </label>
+                            <label class="theme-option">
+                                <InputRadio Value='@("escuro")' />
+                                <span><i class="bi bi-moon-stars"></i><strong>Escuro</strong><small>Interface sempre escura</small></span>
+                            </label>
+                            <label class="theme-option">
+                                <InputRadio Value='@("automatico")' />
+                                <span><i class="bi bi-circle-half"></i><strong>Automático</strong><small>Segue o aparelho</small></span>
+                            </label>
+                        </InputRadioGroup>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Cor principal <small class="text-muted">(botões e destaques)</small></label>
+                            <div class="input-group">
+                                <input type="color" class="form-control form-control-color" @bind="cfg.CorPrimaria" />
+                                <InputText class="form-control" @bind-Value="cfg.CorPrimaria" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Cor do menu lateral</label>
+                            <div class="input-group">
+                                <input type="color" class="form-control form-control-color" @bind="cfg.CorMenu" />
+                                <InputText class="form-control" @bind-Value="cfg.CorMenu" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-outline-secondary" @onclick="Restaurar">
+                            <i class="bi bi-arrow-counterclockwise"></i> Restaurar padrão
+                        </button>
+                        <button type="submit" class="btn btn-primary" disabled="@salvando">
+                            @if (salvando)
+                            {
+                                <span class="spinner-border spinner-border-sm"></span> <text> Aplicando...</text>
+                            }
+                            else
+                            {
+                                <i class="bi bi-check-lg"></i> <text> Salvar e aplicar</text>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
             </div>
-        </EditForm>
+        </div>
+    </div>
+
+    <div class="col-xl-5">
+        <div class="card preview-card position-sticky" style="top:92px">
+            <div class="card-body p-4">
+                <span class="eyebrow">Pré-visualização</span>
+                <p class="text-muted small">Veja como a identificação aparecerá no menu.</p>
+                <div class="brand-preview" style="background:@cfg.CorMenu">
+                    <span class="brand-preview-mark">
+                        @if (!string.IsNullOrWhiteSpace(cfg.LogoDataUrl))
+                        {
+                            <img src="@cfg.LogoDataUrl" alt="Prévia da logomarca" />
+                        }
+                        else
+                        {
+                            <i class="bi bi-briefcase-fill"></i>
+                        }
+                    </span>
+                    <span class="brand-preview-copy">
+                        <strong>@(string.IsNullOrWhiteSpace(cfg.NomeSistema) ? "Gestão de Acordos" : cfg.NomeSistema)</strong>
+                        <small>@(string.IsNullOrWhiteSpace(cfg.SubtituloSistema) ? "Advocacia especializada" : cfg.SubtituloSistema)</small>
+                    </span>
+                </div>
+                <button type="button" class="btn text-white w-100 mt-3" style="background:@cfg.CorPrimaria; border-color:@cfg.CorPrimaria">Botão de exemplo</button>
+            </div>
+        </div>
     </div>
 </div>
 
 @code {
+    private const long TamanhoMaximoLogo = 2 * 1024 * 1024;
+    private static readonly HashSet<string> TiposPermitidos = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/png", "image/jpeg", "image/webp"
+    };
+
     private Configuracao cfg = new();
     private bool salvando;
+    private string? erroLogo;
 
     protected override async Task OnInitializedAsync() => cfg = await ConfigSvc.ObterAsync();
+
+    private async Task SelecionarLogo(InputFileChangeEventArgs e)
+    {
+        erroLogo = null;
+        var arquivo = e.File;
+
+        if (!TiposPermitidos.Contains(arquivo.ContentType))
+        {
+            erroLogo = "Selecione uma imagem PNG, JPG ou WebP.";
+            return;
+        }
+
+        if (arquivo.Size > TamanhoMaximoLogo)
+        {
+            erroLogo = "A imagem deve ter no máximo 2 MB.";
+            return;
+        }
+
+        try
+        {
+            await using var stream = arquivo.OpenReadStream(TamanhoMaximoLogo);
+            using var memoria = new MemoryStream();
+            await stream.CopyToAsync(memoria);
+            cfg.LogoDataUrl = $"data:{arquivo.ContentType};base64,{Convert.ToBase64String(memoria.ToArray())}";
+        }
+        catch
+        {
+            erroLogo = "Não foi possível carregar essa imagem. Tente outro arquivo.";
+        }
+    }
+
+    private void RemoverLogo()
+    {
+        cfg.LogoDataUrl = null;
+        erroLogo = null;
+    }
 
     private async Task Salvar()
     {
         salvando = true;
+        cfg.NomeSistema = string.IsNullOrWhiteSpace(cfg.NomeSistema) ? "Gestão de Acordos" : cfg.NomeSistema.Trim();
+        cfg.SubtituloSistema = string.IsNullOrWhiteSpace(cfg.SubtituloSistema) ? "Advocacia especializada" : cfg.SubtituloSistema.Trim();
+        cfg.Tema = cfg.Tema is "claro" or "escuro" or "automatico" ? cfg.Tema : "automatico";
         await ConfigSvc.SalvarAsync(cfg);
-        // Recarrega para aplicar o tema em toda a interface.
+        await JS.InvokeVoidAsync("themeManager.setPreference", cfg.Tema);
         await JS.InvokeVoidAsync("location.reload");
     }
 
     private void Restaurar()
     {
         cfg.NomeSistema = "Gestão de Acordos";
+        cfg.LogoDataUrl = null;
+        cfg.SubtituloSistema = "Advocacia especializada";
+        cfg.Tema = "automatico";
         cfg.CorPrimaria = "#0d6efd";
         cfg.CorMenu = "#1b2a4a";
+        erroLogo = null;
     }
 }

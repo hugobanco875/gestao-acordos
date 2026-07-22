@@ -12,6 +12,7 @@ public class BackupData
     public string GeradoEm { get; set; } = "";
     public List<Empresa> Empresas { get; set; } = new();
     public List<Cliente> Clientes { get; set; } = new();
+    public List<ClienteEmpresa> ClienteEmpresas { get; set; } = new();
     public List<Acordo> Acordos { get; set; } = new();
     public List<AcordoPdf> AcordosPdf { get; set; } = new();
     public List<Parcela> Parcelas { get; set; } = new();
@@ -35,6 +36,7 @@ public class BackupService(IDbContextFactory<ApplicationDbContext> factory)
             GeradoEm = DateTime.Now.ToString("s"),
             Empresas = await db.Empresas.AsNoTracking().ToListAsync(),
             Clientes = await db.Clientes.AsNoTracking().ToListAsync(),
+            ClienteEmpresas = await db.ClienteEmpresas.AsNoTracking().ToListAsync(),
             Acordos = await db.Acordos.AsNoTracking().ToListAsync(),
             AcordosPdf = await db.AcordosPdf.AsNoTracking().ToListAsync(),
             Parcelas = await db.Parcelas.AsNoTracking().ToListAsync(),
@@ -60,6 +62,7 @@ public class BackupService(IDbContextFactory<ApplicationDbContext> factory)
         await db.Parcelas.ExecuteDeleteAsync();
         await db.AcordosPdf.ExecuteDeleteAsync();
         await db.Acordos.ExecuteDeleteAsync();
+        await db.ClienteEmpresas.ExecuteDeleteAsync();
         await db.Clientes.ExecuteDeleteAsync();
         await db.Empresas.ExecuteDeleteAsync();
 
@@ -83,6 +86,8 @@ public class BackupService(IDbContextFactory<ApplicationDbContext> factory)
             c.Id = 0;
             c.Acordos = new();
             c.Eventos = new();
+            c.ClienteEmpresas = new();
+            c.Empresas = new();
             c.Empresa = null;
             if (empMap.TryGetValue(c.EmpresaId, out var novaEmp)) c.EmpresaId = novaEmp;
             db.Clientes.Add(c);
@@ -90,16 +95,37 @@ public class BackupService(IDbContextFactory<ApplicationDbContext> factory)
             cliMap[old] = c.Id;
         }
 
+        // Vínculos entre clientes e empresas. Backups antigos usam apenas EmpresaId no cliente.
+        var vinculos = data.ClienteEmpresas.Count > 0
+            ? data.ClienteEmpresas
+            : data.Clientes.Select(c => new ClienteEmpresa { ClienteId = c.Id, EmpresaId = c.EmpresaId }).ToList();
+        foreach (var ce in vinculos)
+        {
+            if (!cliMap.TryGetValue(ce.ClienteId, out var novoCli)) continue;
+            if (!empMap.TryGetValue(ce.EmpresaId, out var novaEmp)) continue;
+            db.ClienteEmpresas.Add(new ClienteEmpresa { ClienteId = novoCli, EmpresaId = novaEmp });
+        }
+        await db.SaveChangesAsync();
+
         // Acordos (remapeia ClienteId)
         var acoMap = new Dictionary<int, int>();
         foreach (var a in data.Acordos)
         {
             var old = a.Id;
+            var oldClienteId = a.ClienteId;
             a.Id = 0;
             a.Parcelas = new();
             a.Pdf = null;
             a.Cliente = null;
-            if (cliMap.TryGetValue(a.ClienteId, out var novoCli)) a.ClienteId = novoCli;
+            a.Empresa = null;
+            if (cliMap.TryGetValue(oldClienteId, out var novoCli)) a.ClienteId = novoCli;
+            if (empMap.TryGetValue(a.EmpresaId, out var novaEmpAcordo))
+                a.EmpresaId = novaEmpAcordo;
+            else
+            {
+                var empresaAntiga = data.Clientes.FirstOrDefault(c => c.Id == oldClienteId)?.EmpresaId ?? 0;
+                if (empMap.TryGetValue(empresaAntiga, out var empresaPrincipal)) a.EmpresaId = empresaPrincipal;
+            }
             db.Acordos.Add(a);
             await db.SaveChangesAsync();
             acoMap[old] = a.Id;

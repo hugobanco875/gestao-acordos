@@ -11,6 +11,11 @@ public class Acordo
     public int ClienteId { get; set; }
     public Cliente? Cliente { get; set; }
 
+    [Range(1, int.MaxValue, ErrorMessage = "Selecione a empresa do acordo.")]
+    [Display(Name = "Empresa")]
+    public int EmpresaId { get; set; }
+    public Empresa? Empresa { get; set; }
+
     [StringLength(60)]
     [Display(Name = "Número do processo")]
     public string? NumeroProcesso { get; set; }
@@ -22,6 +27,24 @@ public class Acordo
     [Range(0.01, 999999999, ErrorMessage = "Informe o valor total do acordo.")]
     [Display(Name = "Valor total")]
     public decimal ValorTotal { get; set; }
+
+    [Range(0, 999999999, ErrorMessage = "Informe um valor de entrada válido.")]
+    [Display(Name = "Valor da entrada")]
+    public decimal ValorEntrada { get; set; }
+
+    [Display(Name = "Data da entrada")]
+    public DateOnly? DataEntrada { get; set; }
+
+    public decimal ValorParcelado => Math.Max(0, ValorTotal - ValorEntrada);
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    [Display(Name = "Forma de pagamento da entrada")]
+    public FormaPagamento FormaPagamentoEntrada { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    [StringLength(300)]
+    [Display(Name = "Observação da entrada")]
+    public string? ObservacaoEntrada { get; set; }
 
     [Range(1, 360, ErrorMessage = "Informe a quantidade de parcelas (1 a 360).")]
     [Display(Name = "Quantidade de parcelas")]

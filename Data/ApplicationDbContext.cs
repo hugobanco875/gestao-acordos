@@ -10,9 +10,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 {
     public DbSet<Empresa> Empresas => Set<Empresa>();
     public DbSet<Cliente> Clientes => Set<Cliente>();
+    public DbSet<ClienteEmpresa> ClienteEmpresas => Set<ClienteEmpresa>();
     public DbSet<Acordo> Acordos => Set<Acordo>();
     public DbSet<AcordoPdf> AcordosPdf => Set<AcordoPdf>();
     public DbSet<Parcela> Parcelas => Set<Parcela>();
+    public DbSet<ParcelaComprovante> ParcelaComprovantes => Set<ParcelaComprovante>();
     public DbSet<Evento> Eventos => Set<Evento>();
     public DbSet<Configuracao> Configuracoes => Set<Configuracao>();
 
@@ -37,16 +39,33 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .WithMany(x => x.Clientes)
                 .HasForeignKey(x => x.EmpresaId)
                 .OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Empresas)
+                .WithMany(x => x.ClientesVinculados)
+                .UsingEntity<ClienteEmpresa>(
+                    right => right.HasOne(x => x.Empresa)
+                        .WithMany(x => x.ClienteEmpresas)
+                        .HasForeignKey(x => x.EmpresaId)
+                        .OnDelete(DeleteBehavior.Cascade),
+                    left => left.HasOne(x => x.Cliente)
+                        .WithMany(x => x.ClienteEmpresas)
+                        .HasForeignKey(x => x.ClienteId)
+                        .OnDelete(DeleteBehavior.Cascade),
+                    join => join.HasKey(x => new { x.ClienteId, x.EmpresaId }));
             e.HasIndex(x => x.Nome);
         });
 
         builder.Entity<Acordo>(e =>
         {
             e.Property(x => x.ValorTotal).HasPrecision(18, 2);
+            e.Property(x => x.ValorEntrada).HasPrecision(18, 2);
             e.HasOne(x => x.Cliente)
                 .WithMany(x => x.Acordos)
                 .HasForeignKey(x => x.ClienteId)
                 .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Empresa)
+                .WithMany()
+                .HasForeignKey(x => x.EmpresaId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<AcordoPdf>(e =>
@@ -62,12 +81,24 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         {
             e.Property(x => x.Valor).HasPrecision(18, 2);
             e.Property(x => x.ValorPago).HasPrecision(18, 2);
+            e.Property(x => x.ComprovanteNomeArquivo).HasMaxLength(255);
+            e.Property(x => x.ComprovanteContentType).HasMaxLength(100);
             e.HasOne(x => x.Acordo)
                 .WithMany(x => x.Parcelas)
                 .HasForeignKey(x => x.AcordoId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => x.DataVencimento);
             e.HasIndex(x => x.Paga);
+            e.HasIndex(x => x.Tipo);
+        });
+
+        builder.Entity<ParcelaComprovante>(e =>
+        {
+            e.HasKey(x => x.ParcelaId);
+            e.HasOne(x => x.Parcela)
+                .WithOne(x => x.Comprovante)
+                .HasForeignKey<ParcelaComprovante>(x => x.ParcelaId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<Evento>(e =>

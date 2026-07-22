@@ -74,7 +74,7 @@ else
                         <div class="mb-2">
                             <label class="form-label">CNPJ</label>
                             <div class="input-group">
-                                <InputText class="form-control" @bind-Value="modelo.CnpjCpf" placeholder="00.000.000/0000-00" />
+                                <InputText class="form-control" @bind-Value="modelo.CnpjCpf" placeholder="00.000.000/0000-00" data-mask="cpf-cnpj" inputmode="numeric" maxlength="18" autocomplete="off" />
                                 <button type="button" class="btn btn-outline-primary" @onclick="BuscarCnpj" disabled="@buscandoCnpj" title="Buscar dados pelo CNPJ">
                                     @if (buscandoCnpj)
                                     {
@@ -118,7 +118,7 @@ else
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">CEP</label>
                                 <div class="input-group">
-                                    <InputText class="form-control" @bind-Value="modelo.Cep" placeholder="00000-000" />
+                                    <InputText class="form-control" @bind-Value="modelo.Cep" placeholder="00000-000" data-mask="cep" inputmode="numeric" maxlength="9" autocomplete="postal-code" />
                                     <button type="button" class="btn btn-outline-secondary" @onclick="BuscarCep" disabled="@buscandoCep" title="Buscar endereço pelo CEP">
                                         @if (buscandoCep)
                                         {
@@ -235,7 +235,7 @@ else
             var d = await Cnpj.BuscarAsync(modelo.CnpjCpf);
             if (d is null)
             {
-                cnpjMsg = "CNPJ não encontrado (verifique o número).";
+                cnpjMsg = Cnpj.UltimaMensagem ?? "CNPJ não encontrado (verifique o número).";
                 return;
             }
             if (!string.IsNullOrWhiteSpace(d.RazaoSocial)) modelo.Nome = d.RazaoSocial;
