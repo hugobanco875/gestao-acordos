@@ -3,11 +3,11 @@
 
 @inject SignInManager<ApplicationUser> SignInManager
 
-<ul class="nav nav-pills flex-column">
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage" Match="NavLinkMatch.All">Perfil</NavLink>
-    </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/ChangePassword">Senha</NavLink>
-    </li>
-</ul>
+<nav class="account-nav" aria-label="Navegação da conta">
+    <NavLink class="account-nav-link" href="Account/Manage" Match="NavLinkMatch.All">
+        <i class="bi bi-person-circle"></i><span>Dados pessoais</span>
+    </NavLink>
+    <NavLink class="account-nav-link" href="Account/Manage/ChangePassword">
+        <i class="bi bi-key"></i><span>Alterar senha</span>
+    </NavLink>
+</nav>

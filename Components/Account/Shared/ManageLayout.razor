@@ -1,17 +1,23 @@
 ﻿@inherits LayoutComponentBase
 @layout GestaoAcordos.Components.Layout.MainLayout
 
-<h1>Manage your account</h1>
+<div class="account-page">
+    <div class="page-header mb-4">
+        <span class="eyebrow">Conta</span>
+        <h1>Minha conta</h1>
+        <p>Gerencie seus dados de acesso e segurança.</p>
+    </div>
 
-<div>
-    <h2>Change your account settings</h2>
-    <hr />
-    <div class="row">
-        <div class="col-lg-3">
-            <ManageNavMenu />
+    <div class="row g-4">
+        <div class="col-12 col-lg-3">
+            <div class="account-nav-card">
+                <ManageNavMenu />
+            </div>
         </div>
-        <div class="col-lg-9">
-            @Body
+        <div class="col-12 col-lg-9">
+            <div class="account-content-card">
+                @Body
+            </div>
         </div>
     </div>
 </div>
