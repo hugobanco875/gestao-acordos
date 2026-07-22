@@ -9,6 +9,7 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject IdentityRedirectManager RedirectManager
 
 <PageTitle>Criar conta</PageTitle>
@@ -35,6 +36,11 @@
                 <label for="Input.ConfirmPassword">Confirmar senha</label>
                 <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
             </div>
+            <div class="form-check mb-3">
+                <InputCheckbox @bind-Value="Input.SolicitarAdministrador" id="Input.SolicitarAdministrador" class="form-check-input" />
+                <label class="form-check-label" for="Input.SolicitarAdministrador">Solicitar perfil de administrador</label>
+                <div class="form-text">A permissão só será liberada após autorização de outro administrador.</div>
+            </div>
             <button type="submit" class="w-100 btn btn-lg btn-primary">Criar conta</button>
             <div class="mt-3 text-center">
                 <a href="Account/Login">Já tenho conta — entrar</a>
@@ -57,6 +63,12 @@
     public async Task RegisterUser(EditContext editContext)
     {
         var user = CreateUser();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var primeiroUsuario = !await db.Users.AnyAsync();
+        user.Ativo = true;
+        user.Administrador = primeiroUsuario;
+        user.SolicitouAdministrador = !primeiroUsuario && Input.SolicitarAdministrador;
+        user.CriadoEm = DateTime.Now;
 
         await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
         var emailStore = GetEmailStore();
@@ -109,5 +121,7 @@
         [DataType(DataType.Password)]
         [Compare("Password", ErrorMessage = "As senhas não coincidem.")]
         public string ConfirmPassword { get; set; } = "";
+
+        public bool SolicitarAdministrador { get; set; }
     }
 }

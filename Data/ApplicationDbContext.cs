@@ -5,9 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GestaoAcordos.Data;
 
-public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-    : IdentityDbContext<ApplicationUser>(options), IDataProtectionKeyContext
+public class ApplicationDbContext : IdentityDbContext<ApplicationUser>, IDataProtectionKeyContext
 {
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+        : base(options)
+    {
+    }
     public DbSet<Empresa> Empresas => Set<Empresa>();
     public DbSet<Cliente> Clientes => Set<Cliente>();
     public DbSet<ClienteEmpresa> ClienteEmpresas => Set<ClienteEmpresa>();
@@ -26,6 +29,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+
+        builder.Entity<ApplicationUser>(e =>
+        {
+            e.HasIndex(x => x.Ativo);
+            e.HasIndex(x => x.Administrador);
+            e.HasIndex(x => x.SolicitouAdministrador);
+        });
 
         builder.Entity<Empresa>(e =>
         {
@@ -128,4 +139,5 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             e.HasIndex(x => x.DataHora);
         });
     }
+
 }

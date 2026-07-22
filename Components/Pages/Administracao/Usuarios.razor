@@ -1,0 +1,334 @@
+@page "/usuarios"
+@attribute [Authorize]
+@inject IDbContextFactory<ApplicationDbContext> ContextFactory
+@inject UserManager<ApplicationUser> AppUserManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Usuários</PageTitle>
+
+@if (!_carregado)
+{
+    <div class="text-center py-5" aria-label="Carregando">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+}
+else if (!_autorizado)
+{
+    <div class="alert alert-danger">
+        <i class="bi bi-shield-lock me-2"></i>Acesso permitido somente para administradores ativos.
+    </div>
+}
+else
+{
+    <div class="page-header d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div>
+            <span class="eyebrow">Administração</span>
+            <h1>Usuários</h1>
+            <p>Controle de acesso, situação e permissões administrativas.</p>
+        </div>
+        <span class="badge rounded-pill text-bg-light border px-3 py-2">@_usuarios.Count usuário(s)</span>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_mensagem))
+    {
+        <div class="alert @(_erro ? "alert-danger" : "alert-success")">@_mensagem</div>
+    }
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-muted">Total</div><div class="fs-3 fw-bold">@_usuarios.Count</div></div></div></div>
+        <div class="col-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-muted">Ativos</div><div class="fs-3 fw-bold">@_usuarios.Count(x => x.Ativo)</div></div></div></div>
+        <div class="col-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-muted">Administradores</div><div class="fs-3 fw-bold">@_usuarios.Count(x => x.Administrador)</div></div></div></div>
+        <div class="col-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-muted">Solicitações pendentes</div><div class="fs-3 fw-bold">@_usuarios.Count(x => x.SolicitouAdministrador && !x.Administrador)</div></div></div></div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-7">
+                    <label class="form-label">Pesquisar usuário</label>
+                    <input class="form-control" @bind="_pesquisa" @bind:event="oninput" placeholder="Digite o e-mail" />
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Situação</label>
+                    <select class="form-select" @bind="_filtroSituacao">
+                        <option value="todos">Todos</option>
+                        <option value="ativos">Ativos</option>
+                        <option value="inativos">Inativos</option>
+                        <option value="pendentes">Solicitações pendentes</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-2">
+                    <button type="button" class="btn btn-outline-primary w-100" @onclick="CarregarUsuariosAsync" disabled="@_processando">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Atualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Usuário</th>
+                            <th>Situação</th>
+                            <th>Perfil</th>
+                            <th>Solicitação</th>
+                            <th>Último acesso</th>
+                            <th class="text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!UsuariosFiltrados.Any())
+                        {
+                            <tr><td colspan="6" class="text-center text-muted py-5">Nenhum usuário encontrado.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var usuario in UsuariosFiltrados)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@(usuario.Email ?? usuario.UserName ?? "Usuário sem e-mail")</strong>
+                                        <div class="small text-muted">Criado em @usuario.CriadoEm.ToString("dd/MM/yyyy HH:mm")</div>
+                                    </td>
+                                    <td><span class="badge @(usuario.Ativo ? "text-bg-success" : "text-bg-secondary")">@(usuario.Ativo ? "Ativo" : "Inativo")</span></td>
+                                    <td><span class="badge @(usuario.Administrador ? "text-bg-primary" : "text-bg-light border text-dark")">@(usuario.Administrador ? "Administrador" : "Usuário comum")</span></td>
+                                    <td>
+                                        @if (usuario.SolicitouAdministrador && !usuario.Administrador)
+                                        {
+                                            <span class="badge text-bg-warning">Aguardando autorização</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td>@(usuario.UltimoAcessoEm?.ToString("dd/MM/yyyy HH:mm") ?? "Nunca acessou")</td>
+                                    <td class="text-end">
+                                        <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
+                                            @if (usuario.SolicitouAdministrador && !usuario.Administrador)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-primary" disabled="@(_processando || usuario.Id == _usuarioAtualId)" @onclick="() => AprovarAdministradorAsync(usuario)">
+                                                    <i class="bi bi-check-circle me-1"></i>Aprovar administrador
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_processando" @onclick="() => RecusarAdministradorAsync(usuario)">
+                                                    Recusar
+                                                </button>
+                                            }
+                                            <button type="button" class="btn btn-sm @(usuario.Ativo ? "btn-outline-danger" : "btn-outline-success")" disabled="@(_processando || usuario.Id == _usuarioAtualId)" @onclick="() => AlternarAtivoAsync(usuario)">
+                                                <i class="bi @(usuario.Ativo ? "bi-person-x" : "bi-person-check") me-1"></i>@(usuario.Ativo ? "Inativar" : "Ativar")
+                                            </button>
+                                            <button type="button" class="btn btn-sm @(usuario.Administrador ? "btn-outline-secondary" : "btn-outline-primary")" disabled="@(_processando || usuario.Id == _usuarioAtualId || (usuario.SolicitouAdministrador && !usuario.Administrador))" @onclick="() => AlternarAdministradorAsync(usuario)">
+                                                <i class="bi bi-shield-check me-1"></i>@(usuario.Administrador ? "Remover administrador" : "Tornar administrador")
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <p class="small text-muted mt-2">Por segurança, você não pode inativar sua própria conta nem remover sua própria permissão administrativa.</p>
+}
+
+@code {
+    private List<GestaoAcordos.Data.ApplicationUser> _usuarios = new();
+    private bool _carregado;
+    private bool _autorizado;
+    private bool _processando;
+    private bool _erro;
+    private string? _mensagem;
+    private string _usuarioAtualId = string.Empty;
+    private string _pesquisa = string.Empty;
+    private string _filtroSituacao = "todos";
+
+    private IEnumerable<GestaoAcordos.Data.ApplicationUser> UsuariosFiltrados
+    {
+        get
+        {
+            IEnumerable<GestaoAcordos.Data.ApplicationUser> consulta = _usuarios;
+
+            if (!string.IsNullOrWhiteSpace(_pesquisa))
+            {
+                var termo = _pesquisa.Trim();
+                consulta = consulta.Where(x =>
+                    (x.Email ?? string.Empty).Contains(termo, StringComparison.OrdinalIgnoreCase) ||
+                    (x.UserName ?? string.Empty).Contains(termo, StringComparison.OrdinalIgnoreCase));
+            }
+
+            consulta = _filtroSituacao switch
+            {
+                "ativos" => consulta.Where(x => x.Ativo),
+                "inativos" => consulta.Where(x => !x.Ativo),
+                "pendentes" => consulta.Where(x => x.SolicitouAdministrador && !x.Administrador),
+                _ => consulta
+            };
+
+            return consulta;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authenticationState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var usuarioAtual = await AppUserManager.GetUserAsync(authenticationState.User);
+
+            _autorizado = usuarioAtual is not null && usuarioAtual.Ativo && usuarioAtual.Administrador;
+            _usuarioAtualId = usuarioAtual?.Id ?? string.Empty;
+
+            if (_autorizado)
+            {
+                await CarregarUsuariosAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            DefinirErro($"Não foi possível abrir o painel de usuários: {ex.Message}");
+        }
+        finally
+        {
+            _carregado = true;
+        }
+    }
+
+    private async Task CarregarUsuariosAsync()
+    {
+        if (!_autorizado)
+        {
+            return;
+        }
+
+        await using var db = await ContextFactory.CreateDbContextAsync();
+        _usuarios = await db.Users
+            .AsNoTracking()
+            .OrderByDescending(x => x.SolicitouAdministrador && !x.Administrador)
+            .ThenByDescending(x => x.Administrador)
+            .ThenBy(x => x.Email)
+            .ToListAsync();
+    }
+
+    private async Task AlternarAtivoAsync(GestaoAcordos.Data.ApplicationUser item)
+    {
+        if (item.Id == _usuarioAtualId)
+        {
+            DefinirErro("Você não pode alterar a situação da sua própria conta.");
+            return;
+        }
+
+        await ExecutarAlteracaoAsync(async db =>
+        {
+            var usuario = await db.Users.FindAsync(item.Id);
+            if (usuario is null) return "Usuário não encontrado.";
+
+            usuario.Ativo = !usuario.Ativo;
+            usuario.SecurityStamp = Guid.NewGuid().ToString();
+
+            return $"Situação de {usuario.Email} atualizada com sucesso.";
+        });
+    }
+
+    private async Task AlternarAdministradorAsync(GestaoAcordos.Data.ApplicationUser item)
+    {
+        if (item.Id == _usuarioAtualId)
+        {
+            DefinirErro("Você não pode alterar sua própria permissão administrativa.");
+            return;
+        }
+
+        await ExecutarAlteracaoAsync(async db =>
+        {
+            var usuario = await db.Users.FindAsync(item.Id);
+            if (usuario is null) return "Usuário não encontrado.";
+
+            usuario.Administrador = !usuario.Administrador;
+            usuario.SolicitouAdministrador = false;
+            usuario.AdministradorAutorizadorId = usuario.Administrador ? _usuarioAtualId : null;
+            usuario.AdministradorAutorizadoEm = usuario.Administrador ? DateTime.Now : null;
+            usuario.SecurityStamp = Guid.NewGuid().ToString();
+
+
+            return $"Perfil de {usuario.Email} atualizado com sucesso.";
+        });
+    }
+
+    private async Task AprovarAdministradorAsync(GestaoAcordos.Data.ApplicationUser item)
+    {
+        if (item.Id == _usuarioAtualId)
+        {
+            DefinirErro("A autorização precisa ser realizada por outro administrador.");
+            return;
+        }
+
+        await ExecutarAlteracaoAsync(async db =>
+        {
+            var usuario = await db.Users.FindAsync(item.Id);
+            if (usuario is null) return "Usuário não encontrado.";
+            if (!usuario.SolicitouAdministrador) return "Não existe solicitação administrativa pendente para este usuário.";
+
+            usuario.Administrador = true;
+            usuario.SolicitouAdministrador = false;
+            usuario.AdministradorAutorizadorId = _usuarioAtualId;
+            usuario.AdministradorAutorizadoEm = DateTime.Now;
+            usuario.SecurityStamp = Guid.NewGuid().ToString();
+
+
+            return $"{usuario.Email} agora é administrador.";
+        });
+    }
+
+    private async Task RecusarAdministradorAsync(GestaoAcordos.Data.ApplicationUser item)
+    {
+        await ExecutarAlteracaoAsync(async db =>
+        {
+            var usuario = await db.Users.FindAsync(item.Id);
+            if (usuario is null) return "Usuário não encontrado.";
+
+            usuario.SolicitouAdministrador = false;
+
+            return $"Solicitação de {usuario.Email} recusada.";
+        });
+    }
+
+    private async Task ExecutarAlteracaoAsync(Func<GestaoAcordos.Data.ApplicationDbContext, Task<string>> alteracao)
+    {
+        if (_processando)
+        {
+            return;
+        }
+
+        _processando = true;
+        _mensagem = null;
+
+        try
+        {
+            await using var db = await ContextFactory.CreateDbContextAsync();
+            var mensagemSucesso = await alteracao(db);
+            await db.SaveChangesAsync();
+            await CarregarUsuariosAsync();
+            _erro = false;
+            _mensagem = mensagemSucesso;
+        }
+        catch (Exception ex)
+        {
+            DefinirErro($"Não foi possível concluir a operação: {ex.Message}");
+        }
+        finally
+        {
+            _processando = false;
+        }
+    }
+
+    private void DefinirErro(string mensagem)
+    {
+        _erro = true;
+        _mensagem = mensagem;
+    }
+}

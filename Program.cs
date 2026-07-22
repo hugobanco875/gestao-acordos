@@ -29,6 +29,7 @@ if (!string.IsNullOrWhiteSpace(port))
     builder.WebHost.UseUrls($"http://+:{port}");
 
 // Add services to the container.
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 

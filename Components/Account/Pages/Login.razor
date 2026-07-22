@@ -9,6 +9,8 @@
 @inject ILogger<Login> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
+@inject UserManager<ApplicationUser> UserManager
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <PageTitle>Entrar</PageTitle>
 
@@ -83,10 +85,24 @@
 
     public async Task LoginUser()
     {
+        var usuario = await UserManager.FindByEmailAsync(Input.Email);
+        if (usuario is not null && !usuario.Ativo)
+        {
+            errorMessage = "Seu acesso está inativo. Procure um administrador do sistema.";
+            return;
+        }
+
         var result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: false);
         if (result.Succeeded)
         {
             Logger.LogInformation("Usuário entrou no sistema.");
+            if (usuario is not null)
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var atual = await db.Users.FindAsync(usuario.Id);
+                if (atual is not null) atual.UltimoAcessoEm = DateTime.Now;
+                await db.SaveChangesAsync();
+            }
             RedirectManager.RedirectTo(ReturnUrl);
         }
         else if (result.IsLockedOut)
