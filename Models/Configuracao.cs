@@ -11,6 +11,17 @@ public class Configuracao
     [Display(Name = "Nome do sistema")]
     public string NomeSistema { get; set; } = "Gestão de Acordos";
 
+    [StringLength(80)]
+    [Display(Name = "Descrição da empresa")]
+    public string SubtituloSistema { get; set; } = "Advocacia especializada";
+
+    [StringLength(12)]
+    [Display(Name = "Tema")]
+    public string Tema { get; set; } = "automatico";
+
+    /// <summary>Logomarca personalizada em formato Data URL (PNG, JPEG ou WebP).</summary>
+    public string? LogoDataUrl { get; set; }
+
     /// <summary>Cor de destaque (botões, links, cabeçalhos).</summary>
     [StringLength(9)]
     [Display(Name = "Cor principal")]

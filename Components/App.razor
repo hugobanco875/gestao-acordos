@@ -12,7 +12,9 @@
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <meta name="theme-color" content="#0d6efd" />
+    <meta name="theme-color" content="#171c2b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="icon-192.png" />
     <HeadOutlet />
 </head>
@@ -21,6 +23,7 @@
     <Routes />
     <script src="_framework/blazor.web.js"></script>
     <script src="js/download.js"></script>
+    <script src="js/input-masks.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('service-worker.js');

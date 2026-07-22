@@ -21,17 +21,32 @@ else
     <div class="mb-3">
         <a href="clientes/@cliente.Id" class="btn btn-sm btn-link px-0"><i class="bi bi-arrow-left"></i> Voltar</a>
         <h1 class="h3 mb-0">@(IsEdit ? "Editar acordo" : "Novo acordo")</h1>
-        <div class="text-muted small"><i class="bi bi-person"></i> @cliente.Nome &nbsp;—&nbsp; <i class="bi bi-building"></i> @cliente.Empresa?.Nome</div>
+        <div class="text-muted small"><i class="bi bi-person"></i> @cliente.Nome</div>
     </div>
 
     <EditForm Model="modelo" OnValidSubmit="Salvar">
         <DataAnnotationsValidator />
         <div class="row g-3">
             <div class="col-md-6">
-                <label class="form-label">Número do processo</label>
-                <InputText class="form-control" @bind-Value="modelo.NumeroProcesso" />
+                <label class="form-label">Empresa do acordo *</label>
+                <InputSelect class="form-select" @bind-Value="modelo.EmpresaId" disabled="@IsEdit">
+                    <option value="0">Selecione...</option>
+                    @foreach (var e in empresasDoCliente)
+                    {
+                        <option value="@e.Id">@e.Nome</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => modelo.EmpresaId" />
+                @if (empresasDoCliente.Count > 1 && !IsEdit)
+                {
+                    <div class="form-text">Este cliente está vinculado a mais de uma empresa. Escolha a empresa deste acordo.</div>
+                }
             </div>
             <div class="col-md-6">
+                <label class="form-label">Número do processo</label>
+                <InputText class="form-control" @bind-Value="modelo.NumeroProcesso" placeholder="0000000-00.0000.0.00.0000" data-mask="processo" inputmode="numeric" maxlength="25" autocomplete="off" />
+            </div>
+            <div class="col-12">
                 <label class="form-label">Descrição</label>
                 <InputText class="form-control" @bind-Value="modelo.Descricao" />
             </div>
@@ -39,9 +54,31 @@ else
             @if (!IsEdit)
             {
                 <div class="col-md-4">
-                    <label class="form-label">Valor total (R$) *</label>
+                    <label class="form-label">Valor total do acordo (R$) *</label>
                     <InputNumber class="form-control" step="0.01" @bind-Value="modelo.ValorTotal" />
                     <ValidationMessage For="() => modelo.ValorTotal" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Valor da entrada (R$)</label>
+                    <InputNumber class="form-control" step="0.01" @bind-Value="modelo.ValorEntrada" />
+                    <div class="form-text">Informe zero quando não houver entrada.</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Data da entrada</label>
+                    <InputDate class="form-control" @bind-Value="modelo.DataEntrada" disabled="@(modelo.ValorEntrada <= 0)" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Forma de pagamento da entrada</label>
+                    <InputSelect class="form-select" @bind-Value="modelo.FormaPagamentoEntrada" disabled="@(modelo.ValorEntrada <= 0)">
+                        @foreach (var forma in FormasPagamento.OpcoesRecebimento)
+                        {
+                            <option value="@forma">@FormasPagamento.RotuloSelecao(forma)</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Observação da entrada</label>
+                    <InputText class="form-control" @bind-Value="modelo.ObservacaoEntrada" disabled="@(modelo.ValorEntrada <= 0)" placeholder="Ex.: entrada recebida via PIX" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Qtd. de parcelas *</label>
@@ -52,15 +89,25 @@ else
                     <label class="form-label">Data da 1ª parcela *</label>
                     <InputDate class="form-control" @bind-Value="modelo.DataPrimeiraParcela" />
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label">Saldo a parcelar</label>
+                    <div class="form-control bg-body-tertiary fw-semibold">@SaldoParcelar.ToString("C")</div>
+                </div>
+                @if (!string.IsNullOrEmpty(erroFinanceiro))
+                {
+                    <div class="col-12"><div class="alert alert-danger py-2 mb-0">@erroFinanceiro</div></div>
+                }
             }
             else
             {
                 <div class="col-12">
                     <div class="alert alert-secondary mb-0">
-                        <strong>Valor:</strong> @modelo.ValorTotal.ToString("C") &nbsp;|&nbsp;
-                        <strong>Parcelas:</strong> @modelo.QuantidadeParcelas &nbsp;|&nbsp;
-                        <strong>1ª parcela:</strong> @modelo.DataPrimeiraParcela.ToString("dd/MM/yyyy")
-                        <div class="small text-muted mt-1">Para alterar valores/parcelas, exclua e recrie o acordo (evita conflito com baixas já feitas).</div>
+                        <strong>Empresa:</strong> @modelo.Empresa?.Nome &nbsp;|&nbsp;
+                        <strong>Valor total:</strong> @modelo.ValorTotal.ToString("C") &nbsp;|&nbsp;
+                        <strong>Entrada:</strong> @modelo.ValorEntrada.ToString("C") &nbsp;|&nbsp;
+                        <strong>Saldo parcelado:</strong> @modelo.ValorParcelado.ToString("C") &nbsp;|&nbsp;
+                        <strong>Parcelas:</strong> @modelo.QuantidadeParcelas
+                        <div class="small text-muted mt-1">Para alterar valores, entrada ou quantidade de parcelas, exclua e recrie o acordo para preservar baixas já realizadas.</div>
                     </div>
                 </div>
             }
@@ -79,12 +126,18 @@ else
             </div>
         </div>
 
-        @if (!IsEdit && modelo.ValorTotal > 0 && modelo.QuantidadeParcelas > 0)
+        @if (!IsEdit && SaldoParcelar > 0 && modelo.QuantidadeParcelas > 0)
         {
-            var previa = ParcelaHelper.GerarParcelas(modelo.ValorTotal, modelo.QuantidadeParcelas, modelo.DataPrimeiraParcela);
-            <h2 class="h6 mt-4">Prévia das parcelas</h2>
+            var previa = ParcelaHelper.GerarParcelas(SaldoParcelar, modelo.QuantidadeParcelas, modelo.DataPrimeiraParcela);
+            <h2 class="h6 mt-4">Resumo financeiro</h2>
+            <div class="row g-2 mb-3" style="max-width:720px">
+                <div class="col-4"><div class="border rounded-3 p-3"><div class="small text-muted">Total</div><strong>@modelo.ValorTotal.ToString("C")</strong></div></div>
+                <div class="col-4"><div class="border rounded-3 p-3"><div class="small text-muted">Entrada</div><strong class="text-success">@modelo.ValorEntrada.ToString("C")</strong></div></div>
+                <div class="col-4"><div class="border rounded-3 p-3"><div class="small text-muted">Parcelado</div><strong>@SaldoParcelar.ToString("C")</strong></div></div>
+            </div>
+            <h2 class="h6">Prévia das parcelas</h2>
             <div class="table-responsive">
-                <table class="table table-sm table-bordered" style="max-width:480px">
+                <table class="table table-sm table-bordered" style="max-width:520px">
                     <thead><tr><th>#</th><th>Vencimento</th><th class="text-end">Valor</th></tr></thead>
                     <tbody>
                         @foreach (var p in previa)
@@ -92,7 +145,7 @@ else
                             <tr><td>@p.Numero</td><td>@p.DataVencimento.ToString("dd/MM/yyyy")</td><td class="text-end">@p.Valor.ToString("C")</td></tr>
                         }
                     </tbody>
-                    <tfoot><tr><th colspan="2">Total</th><th class="text-end">@previa.Sum(x => x.Valor).ToString("C")</th></tr></tfoot>
+                    <tfoot><tr><th colspan="2">Total parcelado</th><th class="text-end">@previa.Sum(x => x.Valor).ToString("C")</th></tr></tfoot>
                 </table>
             </div>
         }
@@ -113,9 +166,12 @@ else
     private bool salvando;
     private Cliente? cliente;
     private Acordo modelo = new();
+    private List<Empresa> empresasDoCliente = new();
+    private string? erroFinanceiro;
 
     private byte[]? pdfBytes;
     private string? pdfNome;
+    private decimal SaldoParcelar => Math.Max(0, modelo.ValorTotal - modelo.ValorEntrada);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -123,13 +179,33 @@ else
         using var db = await DbFactory.CreateDbContextAsync();
         if (IsEdit)
         {
-            modelo = await db.Acordos.FirstOrDefaultAsync(a => a.Id == Id) ?? new Acordo();
-            cliente = await db.Clientes.Include(c => c.Empresa).FirstOrDefaultAsync(c => c.Id == modelo.ClienteId);
+            modelo = await db.Acordos.Include(a => a.Empresa).FirstOrDefaultAsync(a => a.Id == Id) ?? new Acordo();
+            cliente = await db.Clientes
+                .Include(c => c.ClienteEmpresas).ThenInclude(ce => ce.Empresa)
+                .Include(c => c.Empresa)
+                .FirstOrDefaultAsync(c => c.Id == modelo.ClienteId);
         }
         else
         {
-            cliente = await db.Clientes.Include(c => c.Empresa).FirstOrDefaultAsync(c => c.Id == ClienteId);
+            cliente = await db.Clientes
+                .Include(c => c.ClienteEmpresas).ThenInclude(ce => ce.Empresa)
+                .Include(c => c.Empresa)
+                .FirstOrDefaultAsync(c => c.Id == ClienteId);
             modelo = new Acordo { ClienteId = ClienteId };
+        }
+
+        if (cliente is not null)
+        {
+            empresasDoCliente = cliente.ClienteEmpresas
+                .Where(x => x.Empresa is not null)
+                .Select(x => x.Empresa!)
+                .DistinctBy(x => x.Id)
+                .OrderBy(x => x.Nome)
+                .ToList();
+            if (empresasDoCliente.Count == 0 && cliente.Empresa is not null)
+                empresasDoCliente.Add(cliente.Empresa);
+            if (!IsEdit && empresasDoCliente.Count == 1)
+                modelo.EmpresaId = empresasDoCliente[0].Id;
         }
         carregando = false;
     }
@@ -151,6 +227,25 @@ else
 
     private async Task Salvar()
     {
+        erroFinanceiro = null;
+        if (!IsEdit)
+        {
+            if (modelo.ValorEntrada < 0 || modelo.ValorEntrada >= modelo.ValorTotal)
+            {
+                erroFinanceiro = "O valor da entrada deve ser menor que o valor total do acordo.";
+                return;
+            }
+            if (modelo.ValorEntrada > 0 && modelo.DataEntrada is null)
+                modelo.DataEntrada = DateOnly.FromDateTime(DateTime.Today);
+            if (modelo.ValorEntrada == 0)
+                modelo.DataEntrada = null;
+            if (!empresasDoCliente.Any(x => x.Id == modelo.EmpresaId))
+            {
+                erroFinanceiro = "Selecione uma empresa vinculada ao cliente.";
+                return;
+            }
+        }
+
         salvando = true;
         using var db = await DbFactory.CreateDbContextAsync();
 
@@ -176,7 +271,22 @@ else
                 modelo.PdfNomeArquivo = pdfNome;
                 modelo.PdfContentType = "application/pdf";
             }
-            modelo.Parcelas = ParcelaHelper.GerarParcelas(modelo.ValorTotal, modelo.QuantidadeParcelas, modelo.DataPrimeiraParcela);
+            modelo.Parcelas = ParcelaHelper.GerarParcelas(SaldoParcelar, modelo.QuantidadeParcelas, modelo.DataPrimeiraParcela);
+            if (modelo.ValorEntrada > 0)
+            {
+                modelo.Parcelas.Add(new Parcela
+                {
+                    Tipo = TipoMovimentoFinanceiro.Entrada,
+                    Numero = 0,
+                    Valor = modelo.ValorEntrada,
+                    DataVencimento = modelo.DataEntrada ?? DateOnly.FromDateTime(DateTime.Today),
+                    Paga = true,
+                    DataPagamento = modelo.DataEntrada ?? DateOnly.FromDateTime(DateTime.Today),
+                    ValorPago = modelo.ValorEntrada,
+                    FormaPagamento = modelo.FormaPagamentoEntrada,
+                    Observacao = modelo.ObservacaoEntrada
+                });
+            }
             db.Acordos.Add(modelo);
             await db.SaveChangesAsync();
             if (pdfBytes is not null)
@@ -188,6 +298,8 @@ else
 
         Nav.NavigateTo($"clientes/{cliente!.Id}");
     }
+
+    private static string NomeForma(FormaPagamento forma) => FormasPagamento.Nome(forma);
 
     private async Task SalvarPdf(ApplicationDbContext db, int acordoId)
     {

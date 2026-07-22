@@ -61,4 +61,6 @@ public class Empresa
     public DateTime CriadoEm { get; set; } = DateTime.Now;
 
     public List<Cliente> Clientes { get; set; } = new();
+    public List<ClienteEmpresa> ClienteEmpresas { get; set; } = new();
+    public List<Cliente> ClientesVinculados { get; set; } = new();
 }

@@ -6,8 +6,7 @@ public class Cliente
 {
     public int Id { get; set; }
 
-    [Range(1, int.MaxValue, ErrorMessage = "Selecione a empresa.")]
-    [Display(Name = "Empresa")]
+    [Display(Name = "Empresa principal")]
     public int EmpresaId { get; set; }
     public Empresa? Empresa { get; set; }
 
@@ -62,6 +61,10 @@ public class Cliente
     public string? Observacoes { get; set; }
 
     public DateTime CriadoEm { get; set; } = DateTime.Now;
+
+    /// <summary>Empresa principal, mantida para compatibilidade e como seleção padrão.</summary>
+    public List<ClienteEmpresa> ClienteEmpresas { get; set; } = new();
+    public List<Empresa> Empresas { get; set; } = new();
 
     public List<Acordo> Acordos { get; set; } = new();
     public List<Evento> Eventos { get; set; } = new();

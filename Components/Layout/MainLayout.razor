@@ -7,85 +7,75 @@
             --cor-primaria: @cfg.CorPrimaria;
             --cor-menu: @cfg.CorMenu;
         }
-        .sidebar {
-            background-image: none !important;
-            background-color: var(--cor-menu) !important;
-        }
-        .btn-primary {
-            --bs-btn-bg: var(--cor-primaria);
-            --bs-btn-border-color: var(--cor-primaria);
-            --bs-btn-hover-bg: var(--cor-primaria);
-            --bs-btn-hover-border-color: var(--cor-primaria);
-            --bs-btn-active-bg: var(--cor-primaria);
-            --bs-btn-active-border-color: var(--cor-primaria);
-            --bs-btn-disabled-bg: var(--cor-primaria);
-            --bs-btn-disabled-border-color: var(--cor-primaria);
-        }
-        .btn-outline-primary {
-            --bs-btn-color: var(--cor-primaria);
-            --bs-btn-border-color: var(--cor-primaria);
-            --bs-btn-hover-bg: var(--cor-primaria);
-            --bs-btn-hover-border-color: var(--cor-primaria);
-            --bs-btn-active-bg: var(--cor-primaria);
-            --bs-btn-active-border-color: var(--cor-primaria);
-        }
+        .sidebar { background: var(--cor-menu) !important; }
+        .btn-primary { --bs-btn-bg: var(--cor-primaria); --bs-btn-border-color: var(--cor-primaria); }
+        .btn-outline-primary { --bs-btn-color: var(--cor-primaria); --bs-btn-border-color: var(--cor-primaria); }
         .text-primary { color: var(--cor-primaria) !important; }
         .bg-primary { background-color: var(--cor-primaria) !important; }
-        .badge.bg-primary { background-color: var(--cor-primaria) !important; }
         .content a:not(.btn) { color: var(--cor-primaria); }
     </style>
+    <script>
+        (() => {
+            const configured = "@cfg.Tema";
+            const theme = configured === "automatico"
+                ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'escuro' : 'claro')
+                : configured;
+            document.documentElement.setAttribute('data-theme', theme);
+            document.documentElement.style.colorScheme = theme === 'escuro' ? 'dark' : 'light';
+        })();
+    </script>
 </HeadContent>
 
 <div class="page">
-    <div class="sidebar">
+    <aside class="sidebar">
         <NavMenu Config="cfg" />
-    </div>
+    </aside>
 
     <main>
-        <div class="top-row px-4">
+        <header class="top-row px-4">
+            <div class="top-row-title d-none d-md-flex">
+                <span class="status-dot"></span>
+                <span>Sistema online</span>
+            </div>
             <AuthorizeView>
                 <Authorized>
-                    <span class="me-3 text-muted d-none d-sm-inline">
-                        <i class="bi bi-person-circle"></i> @context.User.Identity?.Name
-                    </span>
+                    <a href="Account/Manage" class="user-chip">
+                        <span class="user-avatar">@Inicial(context.User.Identity?.Name)</span>
+                        <span class="user-copy d-none d-sm-flex">
+                            <strong>@context.User.Identity?.Name</strong>
+                            <small>Minha conta</small>
+                        </span>
+                    </a>
                     <form action="Account/Logout" method="post">
                         <AntiforgeryToken />
                         <input type="hidden" name="ReturnUrl" value="Account/Login" />
-                        <button type="submit" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-box-arrow-right"></i> Sair
-                        </button>
+                        <button type="submit" class="icon-button" title="Sair"><i class="bi bi-box-arrow-right"></i></button>
                     </form>
                 </Authorized>
-                <NotAuthorized>
-                    <a href="Account/Login" class="btn btn-sm btn-primary">Entrar</a>
-                </NotAuthorized>
+                <NotAuthorized><a href="Account/Login" class="btn btn-sm btn-primary">Entrar</a></NotAuthorized>
             </AuthorizeView>
-        </div>
+        </header>
 
-        <article class="content px-4">
-            @Body
-        </article>
+        <article class="content px-4">@Body</article>
     </main>
 </div>
 
-<div id="blazor-error-ui" data-nosnippet>
-    Ocorreu um erro inesperado.
-    <a href="." class="reload">Recarregar</a>
-    <span class="dismiss">🗙</span>
-</div>
+<AuthorizeView>
+    <Authorized>
+        <nav class="mobile-nav" aria-label="Navegação principal">
+            <NavLink href="" Match="NavLinkMatch.All"><i class="bi bi-grid-1x2"></i><span>Início</span></NavLink>
+            <NavLink href="clientes"><i class="bi bi-people"></i><span>Clientes</span></NavLink>
+            <NavLink href="parcelas"><i class="bi bi-wallet2"></i><span>Parcelas</span></NavLink>
+            <NavLink href="eventos"><i class="bi bi-calendar3"></i><span>Agenda</span></NavLink>
+            <NavLink href="relatorios"><i class="bi bi-bar-chart"></i><span>Relatórios</span></NavLink>
+        </nav>
+    </Authorized>
+</AuthorizeView>
+
+<div id="blazor-error-ui" data-nosnippet>Ocorreu um erro inesperado. <a href="." class="reload">Recarregar</a><span class="dismiss">×</span></div>
 
 @code {
     private Configuracao cfg = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        try
-        {
-            cfg = await ConfigSvc.ObterAsync();
-        }
-        catch
-        {
-            cfg = new Configuracao();
-        }
-    }
+    protected override async Task OnInitializedAsync() { try { cfg = await ConfigSvc.ObterAsync(); } catch { cfg = new Configuracao(); } }
+    private static string Inicial(string? nome) => string.IsNullOrWhiteSpace(nome) ? "U" : nome.Trim()[0].ToString().ToUpperInvariant();
 }

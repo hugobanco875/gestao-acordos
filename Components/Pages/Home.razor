@@ -4,11 +4,23 @@
 
 <PageTitle>Dashboard</PageTitle>
 
-<h1 class="h3 mb-3"><i class="bi bi-speedometer2"></i> Dashboard</h1>
+<div class="page-heading dashboard-heading">
+    <div>
+        <span class="dashboard-eyebrow">VISÃO GERAL</span>
+        <h1 class="h3"><i class="bi bi-grid-1x2"></i> Dashboard</h1>
+        <p class="page-kicker">Acompanhe recebimentos, vencimentos e compromissos em um só lugar.</p>
+    </div>
+    <a href="clientes" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i> Novo acordo</a>
+</div>
 
 @if (carregando)
 {
-    <p><em>Carregando...</em></p>
+    <div class="row g-3">
+        @for (var i = 0; i < 4; i++)
+        {
+            <div class="col-6 col-lg-3"><div class="skeleton" style="height:140px"></div></div>
+        }
+    </div>
 }
 else
 {
@@ -27,37 +39,37 @@ else
     <div class="row g-3 mb-4">
         <div class="col-6 col-lg-3">
             <a href="parcelas" class="text-decoration-none">
-                <div class="card text-bg-primary h-100"><div class="card-body">
-                    <div class="small">Hoje</div>
-                    <div class="h4 mb-0">@SomaAbertas(p => p.DataVencimento == hoje).ToString("C")</div>
-                    <div class="small">@ContaAbertas(p => p.DataVencimento == hoje) parcela(s)</div>
+                <div class="card metric-card metric-primary h-100"><div class="card-body">
+                    <div class="metric-top"><span class="metric-icon"><i class="bi bi-calendar2-check"></i></span><span class="metric-label">Hoje</span></div>
+                    <div class="metric-value">@SomaAbertas(p => p.DataVencimento == hoje).ToString("C")</div>
+                    <div class="metric-meta">@ContaAbertas(p => p.DataVencimento == hoje) parcela(s) em aberto</div>
                 </div></div>
             </a>
         </div>
         <div class="col-6 col-lg-3">
             <a href="parcelas" class="text-decoration-none">
-                <div class="card text-bg-info h-100"><div class="card-body">
-                    <div class="small">Esta semana</div>
-                    <div class="h4 mb-0">@SomaAbertas(p => p.DataVencimento >= inicioSemana && p.DataVencimento <= fimSemana).ToString("C")</div>
-                    <div class="small">@ContaAbertas(p => p.DataVencimento >= inicioSemana && p.DataVencimento <= fimSemana) parcela(s)</div>
+                <div class="card metric-card metric-info h-100"><div class="card-body">
+                    <div class="metric-top"><span class="metric-icon"><i class="bi bi-calendar-week"></i></span><span class="metric-label">Esta semana</span></div>
+                    <div class="metric-value">@SomaAbertas(p => p.DataVencimento >= inicioSemana && p.DataVencimento <= fimSemana).ToString("C")</div>
+                    <div class="metric-meta">@ContaAbertas(p => p.DataVencimento >= inicioSemana && p.DataVencimento <= fimSemana) parcela(s)</div>
                 </div></div>
             </a>
         </div>
         <div class="col-6 col-lg-3">
             <a href="parcelas" class="text-decoration-none">
-                <div class="card text-bg-secondary h-100"><div class="card-body">
-                    <div class="small">Este mês</div>
-                    <div class="h4 mb-0">@SomaAbertas(p => p.DataVencimento >= inicioMes && p.DataVencimento <= fimMes).ToString("C")</div>
-                    <div class="small">@ContaAbertas(p => p.DataVencimento >= inicioMes && p.DataVencimento <= fimMes) parcela(s)</div>
+                <div class="card metric-card metric-neutral h-100"><div class="card-body">
+                    <div class="metric-top"><span class="metric-icon"><i class="bi bi-calendar3"></i></span><span class="metric-label">Este mês</span></div>
+                    <div class="metric-value">@SomaAbertas(p => p.DataVencimento >= inicioMes && p.DataVencimento <= fimMes).ToString("C")</div>
+                    <div class="metric-meta">@ContaAbertas(p => p.DataVencimento >= inicioMes && p.DataVencimento <= fimMes) parcela(s)</div>
                 </div></div>
             </a>
         </div>
         <div class="col-6 col-lg-3">
             <a href="relatorios" class="text-decoration-none">
-                <div class="card text-bg-success h-100"><div class="card-body">
-                    <div class="small">Recebido no mês</div>
-                    <div class="h4 mb-0">@recebidoMes.ToString("C")</div>
-                    <div class="small">pagas em @hoje.ToString("MM/yyyy")</div>
+                <div class="card metric-card metric-success h-100"><div class="card-body">
+                    <div class="metric-top"><span class="metric-icon"><i class="bi bi-check2-circle"></i></span><span class="metric-label">Recebido no mês</span></div>
+                    <div class="metric-value">@recebidoMes.ToString("C")</div>
+                    <div class="metric-meta">Pagamentos em @hoje.ToString("MM/yyyy")</div>
                 </div></div>
             </a>
         </div>
@@ -163,7 +175,7 @@ else
 
         abertas = await db.Parcelas
             .Include(p => p.Acordo)!.ThenInclude(a => a!.Cliente)
-            .Where(p => !p.Paga)
+            .Where(p => !p.Paga && p.Tipo == TipoMovimentoFinanceiro.Parcela)
             .ToListAsync();
 
         vencidas = abertas.Where(p => p.DataVencimento < hoje).OrderBy(p => p.DataVencimento).ToList();
@@ -207,3 +219,7 @@ else
         _ => "bg-secondary"
     };
 }
+
+<style>
+.dashboard-eyebrow{display:block;color:var(--cor-primaria);font-size:.7rem;font-weight:800;letter-spacing:.12em;margin-bottom:.35rem}.dashboard-heading h1{margin-bottom:0!important}.metric-card{position:relative;min-height:140px}.metric-card:before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--metric)}.metric-card .card-body{display:flex;flex-direction:column;justify-content:center}.metric-top{display:flex;align-items:center;gap:.55rem;margin-bottom:1rem}.metric-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:11px;background:color-mix(in srgb,var(--metric) 10%,white);color:var(--metric)}.metric-label{font-size:.78rem;font-weight:700;color:var(--text-muted)}.metric-value{font-size:clamp(1.25rem,2vw,1.65rem);font-weight:800;letter-spacing:-.04em;color:var(--text)}.metric-meta{font-size:.74rem;color:var(--text-muted);margin-top:.35rem}.metric-primary{--metric:var(--cor-primaria)}.metric-info{--metric:#2684ff}.metric-neutral{--metric:#7c3aed}.metric-success{--metric:#12a66a}@@media(max-width:767.98px){.dashboard-heading{align-items:flex-start}.dashboard-heading .btn{white-space:nowrap;font-size:.76rem}.metric-card{min-height:128px}.metric-value{font-size:1.15rem}.metric-icon{width:30px;height:30px}}
+</style>
