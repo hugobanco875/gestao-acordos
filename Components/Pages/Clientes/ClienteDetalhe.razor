@@ -13,7 +13,7 @@
 else
 {
     <div class="mb-3">
-        <a href="clientes" class="btn btn-sm btn-link px-0"><i class="bi bi-arrow-left"></i> Voltar para clientes</a>
+        <a href="clientes" data-enhance-nav="false" class="btn btn-sm btn-link px-0"><i class="bi bi-arrow-left"></i> Voltar para clientes</a>
         <h1 class="h3 mb-1"><i class="bi bi-person"></i> @cliente.Nome</h1>
         <div class="text-muted small">
             <span class="me-3"><i class="bi bi-building"></i> @NomesEmpresas</span>
@@ -30,7 +30,7 @@ else
 
     <div class="d-flex justify-content-between align-items-center mb-2">
         <h2 class="h5 mb-0">Acordos / Processos</h2>
-        <a class="btn btn-primary btn-sm" href="clientes/@cliente.Id/acordos/novo"><i class="bi bi-plus-lg"></i> Novo acordo</a>
+        <a class="btn btn-primary btn-sm" href="clientes/@cliente.Id/acordos/novo" data-enhance-nav="false"><i class="bi bi-plus-lg"></i> Novo acordo</a>
     </div>
 
     @if (cliente.Acordos.Count == 0)
@@ -74,12 +74,12 @@ else
                             </div>
                         </div>
                         <div class="text-nowrap">
-                            <a class="btn btn-sm btn-outline-success" href="acordos/@a.Id" title="Ver parcelas"><i class="bi bi-list-check"></i> Parcelas</a>
+                            <a class="btn btn-sm btn-outline-success" href="acordos/@a.Id" data-enhance-nav="false" title="Ver parcelas"><i class="bi bi-list-check"></i> Parcelas</a>
                             @if (QuantidadeArquivos(a) > 0)
                             {
                                 <button class="btn btn-sm btn-outline-info" @onclick="() => AbrirArquivos(a)" title="Ver arquivos"><i class="bi bi-folder2-open"></i> Arquivos</button>
                             }
-                            <a class="btn btn-sm btn-outline-primary" href="acordos/@a.Id/editar" title="Editar"><i class="bi bi-pencil"></i></a>
+                            <a class="btn btn-sm btn-outline-primary" href="acordos/@a.Id/editar" data-enhance-nav="false" title="Editar"><i class="bi bi-pencil"></i></a>
                             <button class="btn btn-sm btn-outline-danger" @onclick="() => ExcluirAcordo(a)" title="Excluir"><i class="bi bi-trash"></i></button>
                         </div>
                     </div>
@@ -101,7 +101,10 @@ else
                         {
                             <div class="list-group-item d-flex align-items-center justify-content-between gap-2 py-3">
                                 <div class="min-w-0"><div class="fw-semibold text-truncate">@arquivo.Nome</div><div class="small text-muted">@FormatarTamanho(arquivo.Tamanho)</div></div>
-                                <button class="btn btn-sm btn-primary flex-shrink-0" @onclick="() => ExibirArquivo(arquivo)"><i class="bi bi-eye"></i> Exibir</button>
+                                <div class="d-flex gap-1 flex-shrink-0">
+                                    <button class="btn btn-sm btn-primary" @onclick="() => ExibirArquivo(arquivo)"><i class="bi bi-eye"></i> Exibir</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => BaixarArquivo(arquivo)" title="Baixar arquivo" aria-label="Baixar arquivo"><i class="bi bi-download"></i></button>
+                                </div>
                             </div>
                         }
                     </div>
@@ -148,7 +151,7 @@ else
     private Acordo? acordoArquivos;
     private readonly Dictionary<int, int> contagemAnexos = new();
     private List<ArquivoModal> arquivosModal = new();
-    private sealed class ArquivoModal { public int Id { get; init; } public string Nome { get; init; } = string.Empty; public long Tamanho { get; init; } public bool Legado { get; init; } }
+    private sealed class ArquivoModal { public int Id { get; init; } public string Nome { get; init; } = string.Empty; public string ContentType { get; init; } = "application/octet-stream"; public long Tamanho { get; init; } public bool Legado { get; init; } }
 
     private int QuantidadeArquivos(Acordo acordo) => contagemAnexos.GetValueOrDefault(acordo.Id) + (acordo.TemPdf ? 1 : 0);
 
@@ -159,10 +162,10 @@ else
         arquivosModal = await db.AcordoAnexos.AsNoTracking()
             .Where(x => x.AcordoId == acordo.Id)
             .OrderByDescending(x => x.EnviadoEm)
-            .Select(x => new ArquivoModal { Id = x.Id, Nome = x.NomeArquivo, Tamanho = x.TamanhoBytes })
+            .Select(x => new ArquivoModal { Id = x.Id, Nome = x.NomeArquivo, ContentType = x.ContentType, Tamanho = x.TamanhoBytes })
             .ToListAsync();
         if (acordo.TemPdf)
-            arquivosModal.Insert(0, new ArquivoModal { Id = acordo.Id, Nome = acordo.PdfNomeArquivo ?? "acordo.pdf", Legado = true });
+            arquivosModal.Insert(0, new ArquivoModal { Id = acordo.Id, Nome = acordo.PdfNomeArquivo ?? "acordo.pdf", ContentType = "application/pdf", Legado = true });
     }
 
     private void FecharArquivos() { acordoArquivos = null; arquivosModal.Clear(); }
@@ -174,7 +177,17 @@ else
             ? (await db.AcordosPdf.AsNoTracking().FirstOrDefaultAsync(x => x.AcordoId == arquivo.Id))?.Conteudo
             : (await db.AcordoAnexos.AsNoTracking().FirstOrDefaultAsync(x => x.Id == arquivo.Id))?.Conteudo;
         if (conteudo is null) { await JS.InvokeVoidAsync("alert", "Arquivo não encontrado."); return; }
-        await JS.InvokeVoidAsync("appDownload.openPdf", Convert.ToBase64String(conteudo));
+        await JS.InvokeVoidAsync("appDownload.openFile", arquivo.Nome, arquivo.ContentType, Convert.ToBase64String(conteudo));
+    }
+
+    private async Task BaixarArquivo(ArquivoModal arquivo)
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        byte[]? conteudo = arquivo.Legado
+            ? (await db.AcordosPdf.AsNoTracking().FirstOrDefaultAsync(x => x.AcordoId == arquivo.Id))?.Conteudo
+            : (await db.AcordoAnexos.AsNoTracking().FirstOrDefaultAsync(x => x.Id == arquivo.Id))?.Conteudo;
+        if (conteudo is null) { await JS.InvokeVoidAsync("alert", "Arquivo não encontrado."); return; }
+        await JS.InvokeVoidAsync("appDownload.fromBytes", arquivo.Nome, arquivo.ContentType, Convert.ToBase64String(conteudo));
     }
 
     private static string FormatarTamanho(long bytes) => bytes <= 0 ? "Arquivo legado" : bytes < 1024 * 1024 ? $"{bytes / 1024d:N0} KB" : $"{bytes / 1024d / 1024d:N1} MB";

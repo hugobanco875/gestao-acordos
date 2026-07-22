@@ -1,6 +1,8 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject GestaoAcordos.Services.ConfiguracaoService ConfigSvc
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 
 <HeadContent>
     <style>
@@ -53,7 +55,7 @@
 
 <AuthorizeView>
     <Authorized>
-        <nav class="mobile-nav" aria-label="Navegação principal">
+        <nav class="mobile-nav" aria-label="Navegação principal" data-enhance-nav="false">
             <NavLink href="" Match="NavLinkMatch.All"><i class="bi bi-grid-1x2"></i><span>Início</span></NavLink>
             <NavLink href="clientes"><i class="bi bi-people"></i><span>Clientes</span></NavLink>
             <NavLink href="parcelas"><i class="bi bi-wallet2"></i><span>Parcelas</span></NavLink>
@@ -69,14 +71,45 @@
     private Configuracao cfg = new();
     protected override async Task OnInitializedAsync()
     {
+        Navigation.LocationChanged += AoMudarLocalizacao;
+
         try { cfg = await ConfigSvc.ObterAsync(); }
         catch { cfg = new Configuracao(); }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
-            await JS.InvokeVoidAsync("themeManager.initialize", cfg.Tema);
+        try
+        {
+            if (firstRender)
+                await JS.InvokeVoidAsync("themeManager.initialize", cfg.Tema);
+            else
+                await JS.InvokeVoidAsync("themeManager.refresh");
+        }
+        catch (JSDisconnectedException)
+        {
+            // O circuito pode ser encerrado enquanto a página está mudando.
+        }
     }
+
+    private void AoMudarLocalizacao(object? sender, LocationChangedEventArgs e)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                // Aguarda o Blazor concluir a substituição do conteúdo da rota.
+                await Task.Delay(25);
+                await JS.InvokeVoidAsync("themeManager.refresh");
+            }
+            catch (JSDisconnectedException)
+            {
+                // Ignora quando o usuário fecha ou recarrega a página.
+            }
+        });
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= AoMudarLocalizacao;
+
     private static string Inicial(string? nome) => string.IsNullOrWhiteSpace(nome) ? "U" : nome.Trim()[0].ToString().ToUpperInvariant();
 }

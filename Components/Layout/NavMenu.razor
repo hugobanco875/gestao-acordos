@@ -2,7 +2,7 @@
 @inject NavigationManager NavigationManager
 
 <div class="brand-row">
-    <a class="brand" href="">
+    <a class="brand" href="" data-enhance-nav="false">
         <span class="brand-mark">
             @if (!string.IsNullOrWhiteSpace(Config?.LogoDataUrl))
             {
@@ -19,7 +19,7 @@
 </div>
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler')?.click()">
-    <nav class="nav flex-column">
+    <nav class="nav flex-column" data-enhance-nav="false">
         <AuthorizeView>
             <Authorized>
                 <div class="nav-caption">Visão geral</div>

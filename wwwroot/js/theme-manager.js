@@ -25,12 +25,16 @@
         const dark = normalized === 'escuro';
         const root = document.documentElement;
 
-        root.setAttribute('data-theme', normalized);
-        root.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
+        if (root.getAttribute('data-theme') !== normalized)
+            root.setAttribute('data-theme', normalized);
+        const bootstrapTheme = dark ? 'dark' : 'light';
+        if (root.getAttribute('data-bs-theme') !== bootstrapTheme)
+            root.setAttribute('data-bs-theme', bootstrapTheme);
         root.style.colorScheme = dark ? 'dark' : 'light';
 
         if (document.body) {
-            document.body.setAttribute('data-theme', normalized);
+            if (document.body.getAttribute('data-theme') !== normalized)
+                document.body.setAttribute('data-theme', normalized);
             document.body.classList.toggle('theme-dark', dark);
             document.body.classList.toggle('theme-light', !dark);
         }
@@ -59,6 +63,7 @@
         window.addEventListener('storage', function (event) {
             if (event.key === storageKey) refresh();
         });
+        document.addEventListener('DOMContentLoaded', refresh, { once: true });
 
         listenersRegistered = true;
     }

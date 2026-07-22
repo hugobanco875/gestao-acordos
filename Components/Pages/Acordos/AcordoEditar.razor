@@ -19,7 +19,7 @@ else if (cliente is null)
 else
 {
     <div class="mb-3">
-        <a href="clientes/@cliente.Id" class="btn btn-sm btn-link px-0"><i class="bi bi-arrow-left"></i> Voltar</a>
+        <a href="clientes/@cliente.Id" data-enhance-nav="false" class="btn btn-sm btn-link px-0"><i class="bi bi-arrow-left"></i> Voltar</a>
         <h1 class="h3 mb-0">@(IsEdit ? "Editar acordo" : "Novo acordo")</h1>
         <div class="text-muted small"><i class="bi bi-person"></i> @cliente.Nome</div>
     </div>
@@ -114,27 +114,32 @@ else
 
             <div class="col-12">
                 <label class="form-label">Arquivos do acordo</label>
-                <InputFile class="form-control" OnChange="OnPdfsSelected" accept="application/pdf" multiple />
-                <div class="form-text">Você pode selecionar vários PDFs de uma vez ou adicionar novos arquivos em seleções posteriores. Limite de 10 MB por arquivo.</div>
+                <InputFile class="form-control" OnChange="OnArquivosSelected" accept=".pdf,.docx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" multiple />
+                <div class="form-text">Formatos permitidos: PDF, DOCX, JPG, JPEG e PNG. Você pode selecionar vários arquivos de uma vez ou adicionar novos arquivos em seleções posteriores. Limite de 10 MB por arquivo.</div>
 
-                @if (arquivosExistentes.Count > 0 || pdfsSelecionados.Count > 0)
+                @if (arquivosExistentes.Count > 0 || arquivosSelecionados.Count > 0)
                 {
                     <div class="border rounded-3 mt-3 overflow-hidden">
-                        <div class="px-3 py-2 bg-body-tertiary fw-semibold"><i class="bi bi-folder2-open"></i> Arquivos anexados (@(arquivosExistentes.Count + pdfsSelecionados.Count))</div>
+                        <div class="px-3 py-2 bg-body-tertiary fw-semibold"><i class="bi bi-folder2-open"></i> Arquivos anexados (@(arquivosExistentes.Count + arquivosSelecionados.Count))</div>
                         <div class="list-group list-group-flush">
                             @foreach (var arquivo in arquivosExistentes)
                             {
                                 <div class="list-group-item d-flex align-items-center justify-content-between gap-2">
                                     <div class="min-w-0"><div class="text-truncate fw-medium">@arquivo.NomeArquivo</div><div class="small text-muted">@FormatarTamanho(arquivo.TamanhoBytes)</div></div>
-                                    <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" @onclick="() => ExibirArquivoExistente(arquivo.Id)"><i class="bi bi-eye"></i> Exibir</button>
+                                    <div class="d-flex gap-1 flex-shrink-0">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => ExibirArquivoExistente(arquivo.Id)"><i class="bi bi-eye"></i> Exibir</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => BaixarArquivoExistente(arquivo.Id)" title="Baixar arquivo" aria-label="Baixar arquivo"><i class="bi bi-download"></i></button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => SolicitarRemocaoArquivoExistente(arquivo)" title="Remover arquivo"><i class="bi bi-trash"></i> Remover</button>
+                                    </div>
                                 </div>
                             }
-                            @foreach (var arquivo in pdfsSelecionados)
+                            @foreach (var arquivo in arquivosSelecionados)
                             {
                                 <div class="list-group-item d-flex align-items-center justify-content-between gap-2">
                                     <div class="min-w-0"><div class="text-truncate fw-medium">@arquivo.Nome</div><div class="small text-success">Novo arquivo · @FormatarTamanho(arquivo.Conteudo.LongLength)</div></div>
                                     <div class="d-flex gap-1 flex-shrink-0">
                                         <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => ExibirArquivoSelecionado(arquivo)"><i class="bi bi-eye"></i> Exibir</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => BaixarArquivoSelecionado(arquivo)" title="Baixar arquivo" aria-label="Baixar arquivo"><i class="bi bi-download"></i></button>
                                         <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoverArquivoSelecionado(arquivo)"><i class="bi bi-x-lg"></i></button>
                                     </div>
                                 </div>
@@ -171,7 +176,7 @@ else
 
         <div class="mt-3">
             <button type="submit" class="btn btn-primary" disabled="@salvando"><i class="bi bi-check-lg"></i> Salvar acordo</button>
-            <a href="clientes/@cliente.Id" class="btn btn-secondary">Cancelar</a>
+            <a href="clientes/@cliente.Id" data-enhance-nav="false" class="btn btn-secondary">Cancelar</a>
         </div>
     </EditForm>
 }
@@ -188,10 +193,10 @@ else
     private List<Empresa> empresasDoCliente = new();
     private string? erroFinanceiro;
 
-    private sealed class PdfSelecionado
+    private sealed class ArquivoSelecionado
     {
         public string Nome { get; init; } = string.Empty;
-        public string ContentType { get; init; } = "application/pdf";
+        public string ContentType { get; init; } = "application/octet-stream";
         public byte[] Conteudo { get; init; } = Array.Empty<byte>();
     }
 
@@ -202,7 +207,8 @@ else
         public long TamanhoBytes { get; init; }
     }
 
-    private readonly List<PdfSelecionado> pdfsSelecionados = new();
+    private readonly List<ArquivoSelecionado> arquivosSelecionados = new();
+    private readonly HashSet<int> arquivosParaRemover = new();
     private List<ArquivoExistenteResumo> arquivosExistentes = new();
     private decimal SaldoParcelar => Math.Max(0, modelo.ValorTotal - modelo.ValorEntrada);
 
@@ -257,32 +263,47 @@ else
         carregando = false;
     }
 
-    private async Task OnPdfsSelected(InputFileChangeEventArgs e)
+    private static readonly Dictionary<string, string> TiposPermitidos = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".pdf"] = "application/pdf",
+        [".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+        [".png"] = "image/png"
+    };
+
+    private async Task OnArquivosSelected(InputFileChangeEventArgs e)
     {
         const long maxPorArquivo = 10 * 1024 * 1024;
         const int maxArquivosPorSelecao = 20;
 
         foreach (var file in e.GetMultipleFiles(maxArquivosPorSelecao))
         {
-            if (!string.Equals(file.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase) &&
-                !file.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+            var extensao = Path.GetExtension(file.Name);
+            if (string.IsNullOrWhiteSpace(extensao) || !TiposPermitidos.TryGetValue(extensao, out var contentTypeEsperado))
             {
-                await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} não é um PDF válido.");
+                await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} não é permitido. Envie somente PDF, DOCX, JPG, JPEG ou PNG.");
+                continue;
+            }
+
+            if (file.Size <= 0)
+            {
+                await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} está vazio e não foi anexado.");
                 continue;
             }
 
             if (file.Size > maxPorArquivo)
             {
-                await JS.InvokeVoidAsync("alert", $"O PDF {file.Name} ultrapassa o limite de 10 MB.");
+                await JS.InvokeVoidAsync("alert", $"O arquivo {file.Name} ultrapassa o limite de 10 MB.");
                 continue;
             }
 
             using var ms = new MemoryStream();
             await file.OpenReadStream(maxAllowedSize: maxPorArquivo).CopyToAsync(ms);
-            pdfsSelecionados.Add(new PdfSelecionado
+            arquivosSelecionados.Add(new ArquivoSelecionado
             {
-                Nome = file.Name,
-                ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/pdf" : file.ContentType,
+                Nome = Path.GetFileName(file.Name),
+                ContentType = contentTypeEsperado,
                 Conteudo = ms.ToArray()
             });
         }
@@ -302,13 +323,45 @@ else
             await JS.InvokeVoidAsync("alert", "Arquivo não encontrado.");
             return;
         }
-        await JS.InvokeVoidAsync("appDownload.openPdf", Convert.ToBase64String(conteudo));
+        var nomeArquivo = id < 0 ? "acordo.pdf" : arquivosExistentes.FirstOrDefault(x => x.Id == id)?.NomeArquivo ?? "arquivo";
+        var contentType = TipoPeloNome(nomeArquivo);
+        await JS.InvokeVoidAsync("appDownload.openFile", nomeArquivo, contentType, Convert.ToBase64String(conteudo));
     }
 
-    private Task ExibirArquivoSelecionado(PdfSelecionado arquivo)
-        => JS.InvokeVoidAsync("appDownload.openPdf", Convert.ToBase64String(arquivo.Conteudo)).AsTask();
+    private Task ExibirArquivoSelecionado(ArquivoSelecionado arquivo)
+        => JS.InvokeVoidAsync("appDownload.openFile", arquivo.Nome, arquivo.ContentType, Convert.ToBase64String(arquivo.Conteudo)).AsTask();
 
-    private void RemoverArquivoSelecionado(PdfSelecionado arquivo) => pdfsSelecionados.Remove(arquivo);
+    private Task BaixarArquivoSelecionado(ArquivoSelecionado arquivo)
+        => JS.InvokeVoidAsync("appDownload.fromBytes", arquivo.Nome, arquivo.ContentType, Convert.ToBase64String(arquivo.Conteudo)).AsTask();
+
+    private async Task BaixarArquivoExistente(int id)
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        byte[]? conteudo = id < 0
+            ? (await db.AcordosPdf.AsNoTracking().FirstOrDefaultAsync(x => x.AcordoId == -id))?.Conteudo
+            : (await db.AcordoAnexos.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id))?.Conteudo;
+        if (conteudo is null) { await JS.InvokeVoidAsync("alert", "Arquivo não encontrado."); return; }
+        var nomeArquivo = id < 0 ? (arquivosExistentes.FirstOrDefault(x => x.Id == id)?.NomeArquivo ?? "acordo.pdf") : arquivosExistentes.FirstOrDefault(x => x.Id == id)?.NomeArquivo ?? "arquivo";
+        await JS.InvokeVoidAsync("appDownload.fromBytes", nomeArquivo, TipoPeloNome(nomeArquivo), Convert.ToBase64String(conteudo));
+    }
+
+    private void RemoverArquivoSelecionado(ArquivoSelecionado arquivo) => arquivosSelecionados.Remove(arquivo);
+
+    private async Task SolicitarRemocaoArquivoExistente(ArquivoExistenteResumo arquivo)
+    {
+        var confirmar = await JS.InvokeAsync<bool>("confirm", $"Deseja remover somente o arquivo '{arquivo.NomeArquivo}'? A remoção será concluída ao salvar o acordo.");
+        if (!confirmar)
+            return;
+
+        arquivosParaRemover.Add(arquivo.Id);
+        arquivosExistentes.Remove(arquivo);
+    }
+
+    private static string TipoPeloNome(string nomeArquivo)
+    {
+        var extensao = Path.GetExtension(nomeArquivo);
+        return TiposPermitidos.TryGetValue(extensao, out var tipo) ? tipo : "application/octet-stream";
+    }
 
     private static string FormatarTamanho(long bytes)
         => bytes <= 0 ? "Arquivo legado" : bytes < 1024 * 1024 ? $"{bytes / 1024d:N0} KB" : $"{bytes / 1024d / 1024d:N1} MB";
@@ -343,6 +396,7 @@ else
             if (acordo is null) { salvando = false; return; }
             acordo.NumeroProcesso = modelo.NumeroProcesso;
             acordo.Descricao = modelo.Descricao;
+            await RemoverAnexosMarcados(db, acordo);
             await db.SaveChangesAsync();
             await SalvarNovosAnexos(db, acordo.Id);
             await db.SaveChangesAsync();
@@ -377,9 +431,30 @@ else
 
     private static string NomeForma(FormaPagamento forma) => FormasPagamento.Nome(forma);
 
+    private async Task RemoverAnexosMarcados(ApplicationDbContext db, Acordo acordo)
+    {
+        foreach (var id in arquivosParaRemover)
+        {
+            if (id < 0)
+            {
+                var legado = await db.AcordosPdf.FirstOrDefaultAsync(x => x.AcordoId == -id);
+                if (legado is not null)
+                    db.AcordosPdf.Remove(legado);
+
+                acordo.PdfNomeArquivo = null;
+                acordo.PdfContentType = null;
+                continue;
+            }
+
+            var anexo = await db.AcordoAnexos.FirstOrDefaultAsync(x => x.Id == id && x.AcordoId == acordo.Id);
+            if (anexo is not null)
+                db.AcordoAnexos.Remove(anexo);
+        }
+    }
+
     private Task SalvarNovosAnexos(ApplicationDbContext db, int acordoId)
     {
-        foreach (var arquivo in pdfsSelecionados)
+        foreach (var arquivo in arquivosSelecionados)
         {
             db.AcordoAnexos.Add(new AcordoAnexo
             {
