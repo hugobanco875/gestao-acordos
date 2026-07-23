@@ -55,7 +55,7 @@ public class BackupService(
             Acordos = await db.Acordos.AsNoTracking().ToListAsync(),
             AcordosPdf = await db.AcordosPdf.AsNoTracking().ToListAsync(),
             AcordoAnexos = await db.AcordoAnexos.AsNoTracking()
-                .Where(x => x.Conteudo != null && x.Conteudo.Length > 0)
+                .Where(x => x.TamanhoBytes > 0)
                 .ToListAsync(),
             Parcelas = await db.Parcelas.AsNoTracking().ToListAsync(),
             ParcelaComprovantes = await db.ParcelaComprovantes.AsNoTracking().ToListAsync(),
