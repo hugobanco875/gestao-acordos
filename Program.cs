@@ -188,7 +188,7 @@ app.MapPost("/api/acordos/upload-temporario", async (HttpRequest request, Tempor
     if (file.Length > maxSize)
         return Results.BadRequest(new { error = "O arquivo ultrapassa o limite de 10 MB." });
 
-    await using var input = file.OpenReadStream(maxSize);
+    await using var input = file.OpenReadStream();
     using var memory = new MemoryStream(capacity: checked((int)file.Length));
     await input.CopyToAsync(memory);
     var content = memory.ToArray();

@@ -31,7 +31,7 @@ public static class RelogioSistema
             {
                 return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time");
             }
-            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+            catch (Exception exFallback) when (exFallback is TimeZoneNotFoundException or InvalidTimeZoneException)
             {
                 // Último recurso: UTC-3 fixo. Sergipe não utiliza horário de verão.
                 return TimeZoneInfo.CreateCustomTimeZone(
